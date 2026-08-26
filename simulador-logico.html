@@ -288,7 +288,8 @@ textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1
     <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar</td></tr>
     <tr><td>Flechas</td><td>Mover un paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
-    <tr><td>Rueda / Espacio</td><td>Zoom / mover la hoja</td></tr>
+    <tr><td>Dos dedos</td><td>Mueve el lienzo para donde arrastres; el pellizco hace zoom</td></tr>
+    <tr><td>Rueda / Espacio</td><td>Mueve el lienzo · <kbd>Ctrl</kbd>+rueda hace zoom · <kbd>Shift</kbd>+rueda a lo ancho</td></tr>
   </table>
   <div style="margin-top:16px;text-align:right"><button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button></div>
 </div></div>
@@ -1345,11 +1346,21 @@ svg.addEventListener("dblclick", ev => {
 });
 svg.addEventListener("wheel", ev => {
   ev.preventDefault();
-  if (ev.shiftKey) { S.pan.x -= ev.deltaY; render(); return; }
-  const r = svg.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
-  const wx = (mx - S.pan.x) / S.zoom, wy = (my - S.pan.y) / S.zoom;
-  S.zoom = Math.min(4, Math.max(.2, S.zoom * Math.exp(-ev.deltaY * .0016)));
-  S.pan.x = mx - wx * S.zoom; S.pan.y = my - wy * S.zoom;
+  const r = svg.getBoundingClientRect();
+  // El pellizco del trackpad llega como rueda con ctrl apretado: eso es zoom.
+  // El resto (dos dedos arriba/abajo o a los costados) mueve el lienzo.
+  if (ev.ctrlKey || ev.metaKey) {
+    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    const wx = (mx - S.pan.x) / S.zoom, wy = (my - S.pan.y) / S.zoom;
+    S.zoom = Math.min(4, Math.max(.2, S.zoom * Math.exp(-ev.deltaY * .0016)));
+    S.pan.x = mx - wx * S.zoom; S.pan.y = my - wy * S.zoom;
+  } else {
+    const f = ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? r.height : 1;   // líneas o páginas
+    let dx = ev.deltaX, dy = ev.deltaY;
+    if (ev.shiftKey && !dx) { dx = dy; dy = 0; }                             // shift: a lo ancho
+    S.pan.x -= dx * f;
+    S.pan.y -= dy * f;
+  }
   render();
 }, { passive: false });
 
