@@ -49,13 +49,20 @@ button,select,input{font-family:var(--ui);font-size:12px;color:var(--ink)}
 main{flex:1;display:flex;min-height:0}
 #stage{flex:1;position:relative;background:var(--paper);overflow:hidden}
 svg#canvas{width:100%;height:100%;display:block;touch-action:none}
-svg#canvas.mode-connect{cursor:crosshair}
 svg#canvas.panning{cursor:grabbing}
 #palette{position:absolute;top:12px;left:12px;background:var(--paper);border:1px solid var(--line);
   border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:2px;
   box-shadow:0 6px 24px rgba(18,24,31,.08);max-height:calc(100% - 24px);overflow:auto}
 #palette .ptitle{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;padding:2px 4px 4px}
 #palette .sep{height:1px;background:var(--line-2);margin:4px 2px}
+.pgroup{width:180px;display:flex;align-items:center;gap:6px;background:transparent;border:0;
+  border-radius:7px;padding:7px 8px;cursor:pointer;font-family:var(--mono);font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:#93a0ae;text-align:left}
+.pgroup:hover{background:var(--line-2);color:var(--ink-2)}
+.pgroup .chev{width:13px;height:13px;flex:none;stroke:currentColor;stroke-width:2;fill:none;
+  transition:transform .15s}
+.pgroup.abierto .chev{transform:rotate(90deg)}
+.plist{display:flex;flex-direction:column;gap:2px;padding-bottom:4px}
 .ptool{width:166px;display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;
   border-radius:7px;padding:5px 8px;cursor:pointer;text-align:left}
 .ptool:hover{background:var(--line-2)}
@@ -96,6 +103,14 @@ kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line
 .bit.on{color:var(--on)}
 .lamp{width:14px;height:14px;border-radius:50%;background:var(--line-2);border:1.5px solid var(--line);flex:none}
 .lamp.on{background:var(--on);border-color:var(--on);box-shadow:0 0 0 3px var(--on-soft)}
+table.tt{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+table.tt th{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#93a0ae;
+  padding:4px 2px;border-bottom:1px solid var(--line);font-weight:600}
+table.tt td{padding:3px 2px;text-align:center;border-bottom:1px solid var(--line-2);color:var(--ink-2)}
+table.tt td.sep,table.tt th.sep{border-left:1px solid var(--line)}
+table.tt td.v1{color:var(--on);font-weight:600}
+table.tt td.edit{cursor:pointer;color:var(--ink);font-weight:600}
+table.tt td.edit:hover{background:var(--accent-soft);color:var(--accent)}
 #status{display:flex;align-items:center;gap:16px;padding:5px 14px;background:var(--paper);
   border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:#8a97a5}
 #status .k{color:var(--ink-2)}
@@ -141,6 +156,7 @@ textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1
 .pin{fill:var(--paper);stroke:var(--accent);stroke-width:1.4;cursor:crosshair}
 .pin:hover{fill:var(--accent)}
 .pin.taken{stroke:var(--off)}
+.pin-hit{fill:transparent;stroke:none;cursor:crosshair}
 .band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
 .ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
 .led-off{fill:#eef1f4;stroke:#101418;stroke-width:1.7}
@@ -155,14 +171,6 @@ textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1
 
 <header>
   <div class="brand"><b>Circuitos lógicos</b><span>simulador</span></div>
-
-  <div class="group">
-    <span class="glab">Modo</span>
-    <button class="btn on" id="m-select" title="Seleccionar / mover (V)">
-      <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg>Selección</button>
-    <button class="btn" id="m-connect" title="Conectar (C)">
-      <svg viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M13 8l4 4-4 4"/><circle cx="20" cy="12" r="1.5"/></svg>Cablear</button>
-  </div>
 
   <div class="group">
     <span class="glab">Edición</span>
@@ -209,6 +217,8 @@ textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1
       <option value="full">Sumador completo</option>
       <option value="latch">Latch SR</option>
       <option value="mux">Multiplexor 2 a 1</option>
+      <option value="cont">Contador binario (JK)</option>
+      <option value="regd">Registro con biestable D</option>
     </select>
     <button class="btn ghost" id="b-clear">Vaciar</button>
   </div>
@@ -242,7 +252,7 @@ textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1
         <g id="gOverlay"></g>
       </g>
     </svg>
-    <div id="palette"><div class="ptitle">COMPUERTAS</div></div>
+    <div id="palette"></div>
     <div id="toast"></div>
   </div>
 
@@ -268,10 +278,11 @@ textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1
   <p class="sub">El circuito se simula solo: cada cambio recalcula y los cables en 1 se pintan de verde.</p>
   <table class="help">
     <tr><td>Clic en un interruptor</td><td>Cambia su valor entre 0 y 1</td></tr>
-    <tr><td>Arrastrar desde un pin</td><td>Cablea salida → entrada. Cada entrada admite un solo cable; una salida puede ir a varias</td></tr>
-    <tr><td><kbd>V</kbd> / <kbd>C</kbd></td><td>Modo selección / modo cablear</td></tr>
+    <tr><td>Arrastrar desde un pin</td><td>Cablea salida → entrada, sin activar ningún modo. Pasá el mouse por una compuerta y aparecen sus pines. Cada entrada admite un solo cable; una salida puede ir a varias</td></tr>
     <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td>AND, OR, NOT, NAND, NOR, XOR, XNOR</td></tr>
-    <tr><td><kbd>I</kbd> / <kbd>O</kbd> / <kbd>L</kbd></td><td>Entrada, salida, texto</td></tr>
+    <tr><td><kbd>I</kbd> / <kbd>O</kbd> / <kbd>L</kbd> / <kbd>P</kbd></td><td>Entrada, salida, texto, pulso de reloj</td></tr>
+    <tr><td><kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd></td><td>Biestable RS, JK, D</td></tr>
+    <tr><td>Biestables</td><td>Cambian de estado en el flanco de subida del reloj. Seleccioná uno y en el panel derecho tenés su tabla de verdad y su tabla de excitación; en el Custom las dos son editables</td></tr>
     <tr><td><kbd>T</kbd></td><td>Tabla de verdad con la expresión simplificada</td></tr>
     <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
@@ -311,19 +322,95 @@ const T = {
   buf:  { w: 44, h: 36, pins: 1, nombre: "Buffer" },
   in:   { w: 48, h: 30, pins: 0, nombre: "Entrada" },
   out:  { w: 30, h: 30, pins: 1, nombre: "Salida" },
-  label:{ w: 60, h: 20, pins: 0, nombre: "Texto" }
+  label:{ w: 60, h: 20, pins: 0, nombre: "Texto" },
+  clk:  { w: 52, h: 32, pins: 0, nombre: "Señal de reloj" },
+  ff:   { w: 104, h: 76, pins: 0, nombre: "Biestable" }
 };
+/* Biestables: cada uno define sus patas y su tabla característica.
+   La tabla es un array de 2^(datos+1) posiciones: índice = (bits de datos << 1) | Q,
+   valor = 0, 1 o null (indefinido, se queda como estaba). */
+const BIESTABLES = {
+  rs: { nombre: "RS", pins: [{ n: "S" }, { n: "CLK", clk: true }, { n: "R" }],
+        f: (d, q) => d[0] && d[1] ? null : d[0] ? 1 : d[1] ? 0 : q,
+        nota: "S=R=1 es la combinación prohibida" },
+  jk: { nombre: "JK", pins: [{ n: "J" }, { n: "CLK", clk: true }, { n: "K" }],
+        f: (d, q) => d[0] && d[1] ? (q ? 0 : 1) : d[0] ? 1 : d[1] ? 0 : q,
+        nota: "J=K=1 conmuta" },
+  d:  { nombre: "D", pins: [{ n: "D" }, { n: "CLK", clk: true }],
+        f: (d) => d[0] ? 1 : 0, nota: "Copia D en cada flanco" },
+  t:  { nombre: "T", pins: [{ n: "T" }, { n: "CLK", clk: true }],
+        f: (d, q) => d[0] ? (q ? 0 : 1) : q, nota: "T=1 conmuta" },
+  custom: { nombre: "Custom", pins: [{ n: "X" }, { n: "CLK", clk: true }], f: null,
+        nota: "Editá la tabla y el circuito la respeta" }
+};
+function pinsDe(kind, conClk) {
+  const base = JSON.parse(JSON.stringify(BIESTABLES[kind].pins));
+  return conClk ? base : base.filter(p => !p.clk);
+}
+const datosDe = (n) => n.pins.map((p, i) => p.clk ? -1 : i).filter(i => i >= 0);
+const clkDe = (n) => n.pins.findIndex(p => p.clk);
+function tablaDe(n) {                          // arma (o completa) la tabla característica
+  const d = datosDe(n).length, largo = 1 << (d + 1);
+  if (!Array.isArray(n.tabla) || n.tabla.length !== largo) {
+    const f = BIESTABLES[n.kind] && BIESTABLES[n.kind].f;
+    n.tabla = Array.from({ length: largo }, (_, k) => {
+      const q = k & 1, bits = k >> 1;
+      const datos = Array.from({ length: d }, (_, i) => (bits >> (d - 1 - i)) & 1);
+      return f ? f(datos, q) : q;              // el custom arranca reteniendo
+    });
+  }
+  return n.tabla;
+}
+function proximoQ(n, datos, q) {
+  const d = datos.length;
+  const bits = datos.reduce((a, b, i) => a | ((b ? 1 : 0) << (d - 1 - i)), 0);
+  const v = tablaDe(n)[(bits << 1) | (q ? 1 : 0)];
+  return v === null || v === undefined ? q : (v ? 1 : 0);
+}
+/* La tabla de excitación es la misma información leída al revés:
+   para cada transición Q → Q(t+1), qué hay que poner en las entradas. */
+function excitacion(n) {
+  const idx = datosDe(n), d = idx.length, tab = tablaDe(n);
+  return [[0, 0], [0, 1], [1, 0], [1, 1]].map(([q, qn]) => {
+    const combos = [];
+    for (let c = 0; c < (1 << d); c++) if (tab[(c << 1) | q] === qn) combos.push(c);
+    const patron = Array.from({ length: d }, (_, i) => {
+      if (!combos.length) return "—";
+      const bits = combos.map(c => (c >> (d - 1 - i)) & 1);
+      return bits.every(b => b === bits[0]) ? String(bits[0]) : "X";
+    });
+    return { q, qn, patron, combos };
+  });
+}
+function aplicarExcitacion(n, fila, patron) {   // patrón con 0/1/X → vuelca a la tabla
+  const d = datosDe(n).length, tab = tablaDe(n);
+  for (let c = 0; c < (1 << d); c++) {
+    let ok = true;
+    for (let i = 0; i < d; i++) {
+      const b = (c >> (d - 1 - i)) & 1;
+      if (patron[i] !== "X" && patron[i] !== "—" && +patron[i] !== b) { ok = false; break; }
+    }
+    if (ok) tab[(c << 1) | fila.q] = fila.qn;
+  }
+}
 const STUB = 10;                     // largo de las patitas
 const bodyW = (n) => T[n.type].w;
+const FF_CAB = 24, FF_FILA = 26;              // alto del encabezado y de cada fila
 const bodyH = (n) => n.type === "label" ? T.label.h
+  : n.type === "ff" ? FF_CAB + Math.max(2, nIn(n)) * FF_FILA
   : Math.max(T[n.type].h, (nIn(n) > 2 ? nIn(n) * 17 + 12 : T[n.type].h));
-const nIn = (n) => n.type === "out" ? 1 : (T[n.type].var ? (n.pins || 2) : T[n.type].pins);
+const nIn = (n) => n.type === "ff" ? n.pins.length
+  : n.type === "out" ? 1 : (T[n.type].var ? (n.pins || 2) : T[n.type].pins);
+const nOut = (n) => n.type === "ff" ? 2 : (n.type === "out" || n.type === "label" ? 0 : 1);
+const esSalida = (pin) => typeof pin === "string" && pin[0] === "o";
+const idxSalida = (pin) => pin === "o" ? 0 : +String(pin).slice(1);
+const claveSal = (id, i) => id + "#" + i;
 const bubR = (n) => T[n.type].bubble ? 5 : 0;
 const outX = (n) => bodyW(n) / 2 + bubR(n) * 2 + STUB;
 const inX  = (n) => -bodyW(n) / 2 - STUB;
 
 let uidc = 1; const uid = (p) => p + (uidc++);
-let S = { nodes: [], wires: [], sel: [], selW: [], mode: "select", snap: true, grid: 20,
+let S = { nodes: [], wires: [], sel: [], selW: [], snap: true, grid: 20,
   showGrid: true, zoom: 1, pan: { x: 80, y: 60 } };
 let VAL = new Map(), OSC = false;
 
@@ -331,12 +418,31 @@ const getNode = (id) => S.nodes.find(n => n.id === id);
 const getWire = (id) => S.wires.find(w => w.id === id);
 
 function makeNode(type, x, y, extra) {
+  let kind = null;
+  if (type.indexOf(":") > 0) { const p = type.split(":"); type = p[0]; kind = p[1]; }
   const n = Object.assign({ id: uid("n"), type, x, y, label: "" }, extra || {});
   if (T[type].var) n.pins = n.pins || 2;
   if (type === "in") { n.on = !!n.on; n.label = n.label || proximaLetra(); }
+  if (type === "clk") { n.on = !!n.on; n.modo = n.modo || "pulso"; n.corriendo = false; n.label = n.label || "CLK"; }
   if (type === "out") n.label = n.label || "S";
   if (type === "label") n.label = n.label || "Texto";
+  if (type === "ff") {
+    let conClk = true;
+    if (kind && kind.indexOf("-") > 0) { const q = kind.split("-"); kind = q[0]; conClk = q[1] !== "sin"; }
+    n.kind = n.kind || kind || "d";
+    if (n.conClk === undefined) n.conClk = conClk;
+    n.pins = n.pins || pinsDe(n.kind, n.conClk);
+    n.label = n.label || proximoNombreFF();
+    n.q = n.q || 0; n.clkPrev = 0; n.clkArranque = false;
+    n.salida = n.salida || "Q"; n.salidaNeg = n.salidaNeg || "Q";
+    tablaDe(n);
+  }
   return n;
+}
+function proximoNombreFF() {
+  const usadas = new Set(S.nodes.filter(n => n.type === "ff").map(n => n.label));
+  for (let i = 0; i < 26; i++) { const l = String.fromCharCode(65 + i); if (!usadas.has(l)) return l; }
+  return "X";
 }
 function proximaLetra() {
   const usadas = new Set(S.nodes.filter(n => n.type === "in").map(n => n.label));
@@ -350,13 +456,23 @@ function rectOf(n) {
   const l = n.x - w / 2 - (nIn(n) ? STUB : 0), r = n.x + w / 2 + bubR(n) * 2 + (n.type === "label" ? 0 : STUB);
   return { l, r, t: n.y - h / 2, b: n.y + h / 2, w: r - l, h, cx: n.x, cy: n.y };
 }
+const filaFF = (n, i) => n.y - bodyH(n) / 2 + FF_CAB + FF_FILA * (i + 0.5);
 function pinPoint(n, pin) {
-  if (pin === "o") return { x: n.x + outX(n), y: n.y };
-  const k = nIn(n), h = bodyH(n);
-  const y = k === 1 ? n.y : n.y - h / 2 + h * (pin + 1) / (k + 1);
+  const h = bodyH(n);
+  if (esSalida(pin)) {
+    const k = nOut(n), i = idxSalida(pin);
+    if (k <= 1) return { x: n.x + outX(n), y: n.y };
+    // en el biestable, Q y Q̄ se apoyan en la primera y la última fila: queda todo alineado
+    const y = n.type === "ff" ? filaFF(n, i === 0 ? 0 : Math.max(1, nIn(n) - 1))
+                              : n.y - h / 2 + h * (i + 1) / (k + 1);
+    return { x: n.x + outX(n), y: Math.round(y * 2) / 2 };
+  }
+  const k = nIn(n);
+  const y = n.type === "ff" ? filaFF(n, pin)
+          : k === 1 ? n.y : n.y - h / 2 + h * (pin + 1) / (k + 1);
   return { x: n.x + inX(n), y: Math.round(y * 2) / 2 };
 }
-const pinDir = (pin) => pin === "o" ? { x: 1, y: 0 } : { x: -1, y: 0 };
+const pinDir = (pin) => esSalida(pin) ? { x: 1, y: 0 } : { x: -1, y: 0 };
 const snapV = (v) => S.snap ? Math.round(v / S.grid) * S.grid : Math.round(v);
 function bboxAll() {
   if (!S.nodes.length) return { l: 0, t: 0, r: 400, b: 300 };
@@ -409,7 +525,7 @@ function overlapInfo(sg, other) {
   return null;
 }
 // dos cables que salen de la misma salida comparten tronco: se premia que viajen juntos
-const hermanos = (a, b) => a.from === b.from;
+const hermanos = (a, b) => a.from === b.from;   // misma salida del mismo bloque
 function scorePath(pts, obst, placed, keys) {
   let s = (segsOf(pts).length - 1) * 16;
   for (const sg of segsOf(pts)) {
@@ -447,12 +563,12 @@ function routeAll() {
   for (const w of S.wires) {
     const from = getNode(w.from.id), to = getNode(w.to.id);
     if (!from || !to) { w.pts = null; continue; }
-    const A = pinPoint(from, "o"), B = pinPoint(to, w.to.pin);
+    const A = pinPoint(from, w.from.pin || "o"), B = pinPoint(to, w.to.pin);
     const Rf = rectOf(from), Rt = rectOf(to);
     const near = { l: Math.min(Rf.l, Rt.l), r: Math.max(Rf.r, Rt.r), t: Math.min(Rf.t, Rt.t), b: Math.max(Rf.b, Rt.b) };
     const obst = S.nodes.filter(n => n.id !== from.id && n.id !== to.id && n.type !== "label")
       .map(n => infl(rectOf(n), 7));
-    const keys = { from: w.from.id, to: w.to.id + ":" + w.to.pin };
+    const keys = { from: w.from.id + ":" + (w.from.pin || "o"), to: w.to.id + ":" + w.to.pin };
     const cands = candidatos(A, pinDir("o"), B, pinDir(w.to.pin), near, all);
     const orden = cands.map(p => ({ p, s: scorePath(p, obst, placed, keys) })).sort((x, y) => x.s - y.s);
     const uniq = [];
@@ -498,9 +614,11 @@ function junctionDots() {
     for (let i = 1; i < a.pts.length - 1; i++) {
       const p = a.pts[i];
       for (const b of S.wires) {
-        if (b === a || !b.pts || a.from.id !== b.from.id) continue;
+        if (b === a || !b.pts) continue;
+        if (a.from.id !== b.from.id || (a.from.pin || "o") !== (b.from.pin || "o")) continue;
         if (segsOf(b.pts).some(sg => inSeg(p, sg))) {
-          dots.set(Math.round(p.x) + "," + Math.round(p.y), { p, id: a.from.id });
+          dots.set(Math.round(p.x) + "," + Math.round(p.y),
+            { p, id: a.from.id, i: idxSalida(a.from.pin || "o") });
           break;
         }
       }
@@ -525,41 +643,81 @@ function evalGate(t, v) {
     default: return 0;
   }
 }
+/* Simulación en dos tiempos:
+   1) se asienta la parte combinacional con los biestables quietos;
+   2) se buscan flancos de subida de reloj, se actualizan los Q y se vuelve a asentar
+      (así funcionan los contadores en cascada, donde un flanco dispara el siguiente). */
 function simulate(nodes, wires, prev) {
   const val = new Map();
-  for (const n of nodes) val.set(n.id, n.type === "in" ? (n.on ? 1 : 0) : (prev && prev.get(n.id)) || 0);
   const src = new Map();
-  for (const n of nodes) src.set(n.id, []);
-  for (const w of wires) { const a = src.get(w.to.id); if (a) a[w.to.pin] = w.from.id; }
-  let osc = false;
-  const orden = nodes.filter(n => n.type !== "in" && n.type !== "label");
-  for (let pass = 0; ; pass++) {
-    let cambio = false;
-    for (const n of orden) {
-      const s = src.get(n.id) || [], k = nIn(n), v = [];
-      for (let i = 0; i < k; i++) v.push(s[i] !== undefined ? (val.get(s[i]) || 0) : 0);
-      const r = evalGate(n.type, v);
-      if (r !== val.get(n.id)) { val.set(n.id, r); cambio = true; }
+  for (const w of wires) src.set(w.to.id + ":" + w.to.pin, { id: w.from.id, i: idxSalida(w.from.pin || "o") });
+  const leer = (id, i) => val.get(claveSal(id, i)) || 0;
+  const entrada = (n, i) => { const q = src.get(n.id + ":" + i); return q ? leer(q.id, q.i) : 0; };
+  for (const n of nodes) {
+    if (n.type === "in" || n.type === "clk") val.set(claveSal(n.id, 0), n.on ? 1 : 0);
+    else if (n.type === "ff") { val.set(claveSal(n.id, 0), n.q ? 1 : 0); val.set(claveSal(n.id, 1), n.q ? 0 : 1); }
+    else val.set(claveSal(n.id, 0), (prev && prev.get(claveSal(n.id, 0))) || 0);
+  }
+  const comb = nodes.filter(n => !/^(in|clk|ff|label)$/.test(n.type));
+  const asincronos = nodes.filter(n => n.type === "ff" && n.conClk === false);
+  const asentar = () => {
+    for (let pass = 0; ; pass++) {
+      let cambio = false;
+      for (const n of comb) {
+        const v = [];
+        for (let i = 0; i < nIn(n); i++) v.push(entrada(n, i));
+        const r = evalGate(n.type, v);
+        if (r !== leer(n.id, 0)) { val.set(claveSal(n.id, 0), r); cambio = true; }
+      }
+      for (const n of asincronos) {          // sin reloj: siguen a sus entradas, como un latch
+        const datos = datosDe(n).map(i => entrada(n, i));
+        const nq = proximoQ(n, datos, n.q ? 1 : 0);
+        if (nq !== n.q) { n.q = nq; cambio = true; }
+        val.set(claveSal(n.id, 0), n.q ? 1 : 0);
+        val.set(claveSal(n.id, 1), n.q ? 0 : 1);
+      }
+      if (!cambio) return false;
+      if (pass > 60) return true;
     }
-    if (!cambio) break;
-    if (pass > 60) { osc = true; break; }
+  };
+  let osc = asentar();
+  const ffs = nodes.filter(n => n.type === "ff" && n.conClk !== false);
+  if (ffs.length) for (let vuelta = 0; vuelta < 16; vuelta++) {
+    let disparo = false;
+    for (const n of ffs) {
+      const ic = clkDe(n);
+      const clk = ic >= 0 ? entrada(n, ic) : 0;
+      if (!n.clkArranque) { n.clkArranque = true; n.clkPrev = clk; }   // al abrir no hay flanco
+      else if (clk === 1 && !n.clkPrev) {                  // flanco de subida
+        const datos = datosDe(n).map(i => entrada(n, i));
+        const nq = proximoQ(n, datos, n.q ? 1 : 0);
+        if (nq !== n.q) disparo = true;
+        n.q = nq;
+      }
+      n.clkPrev = clk;
+      val.set(claveSal(n.id, 0), n.q ? 1 : 0);
+      val.set(claveSal(n.id, 1), n.q ? 0 : 1);
+    }
+    if (!disparo) break;
+    osc = asentar() || osc;
   }
   return { val, osc };
 }
 function correr() { const r = simulate(S.nodes, S.wires, VAL); VAL = r.val; OSC = r.osc; }
+const valorDe = (id, i) => VAL.get(claveSal(id, i || 0)) === 1;
 function truthTable() {
   const ins = S.nodes.filter(n => n.type === "in").sort((a, b) => a.x - b.x || a.y - b.y);
   const outs = S.nodes.filter(n => n.type === "out").sort((a, b) => a.y - b.y || a.x - b.x);
   if (!ins.length || !outs.length) return null;
   if (ins.length > 10) return { demasiadas: ins.length };
-  const copia = S.nodes.map(n => Object.assign({}, n));
+  const copia = S.nodes.map(n => JSON.parse(JSON.stringify(n)));   // los biestables no deben cambiar de estado
   const rows = [], total = 1 << ins.length;
   for (let m = 0; m < total; m++) {
     for (let i = 0; i < ins.length; i++)
       copia.find(n => n.id === ins[i].id).on = !!((m >> (ins.length - 1 - i)) & 1);
     const { val, osc } = simulate(copia, S.wires);
     rows.push({ m, in: ins.map((n, i) => (m >> (ins.length - 1 - i)) & 1),
-      out: outs.map(o => val.get(o.id) || 0), osc });
+      out: outs.map(o => val.get(claveSal(o.id, 0)) || 0), osc });
   }
   return { ins, outs, rows };
 }
@@ -649,7 +807,7 @@ function drawGate(g, n, cls) {
   if (n.label) el("text", { class: "g-label", x: 0, y: -h / 2 - 10, "font-size": 12 }, g).textContent = n.label;
 }
 function renderNode(n) {
-  const on = VAL.get(n.id) === 1;
+  const on = valorDe(n.id, 0);
   const g = el("g", { class: "node" + (S.sel.includes(n.id) ? " sel" : ""), "data-id": n.id,
     transform: `translate(${n.x},${n.y})` }, gNodes);
   if (n.type === "in") {
@@ -666,6 +824,62 @@ function renderNode(n) {
       fill: on ? "#ffffff" : "#7c8894" }, g).textContent = on ? "1" : "0";
     el("text", { class: "g-label", x: 0, y: -25, "font-size": 13 }, g).textContent = n.label;
     el("line", { class: "g-stub", x1: -14, y1: 0, x2: inX(n), y2: 0 }, g);
+  } else if (n.type === "clk") {
+    const w = T.clk.w, h = T.clk.h, tinta = n.on ? "#0b7a3c" : "#101418";
+    el("rect", { class: "sw-track" + (n.on ? " on" : ""), x: -w / 2, y: -h / 2, width: w, height: h, rx: 6 }, g);
+    if (n.modo === "fijo") {                       // nivel mantenido: escalón que se queda
+      el("path", { class: "g-stub", stroke: tinta,
+        d: n.on ? `M -17 7 h 7 v -14 h 12` : `M -17 7 h 19` }, g);
+      el("text", { class: "g-label", x: 12, y: n.on ? -7 : 7, "font-size": 12, fill: tinta }, g)
+        .textContent = n.on ? "1" : "0";
+    } else {
+      el("path", { class: "g-stub", d: `M -15 6 v -6 h 7 v -8 h 7 v 8 h 7 v 6`, stroke: tinta }, g);
+      if (n.modo === "auto") el("path", { class: "g-stub", fill: tinta, stroke: "none",
+        d: n.corriendo ? `M 12 -5 h 3 v 10 h -3 z M 18 -5 h 3 v 10 h -3 z` : `M 13 -6 L 21 0 L 13 6 z` }, g);
+    }
+    el("text", { class: "g-label", x: 0, y: -h / 2 - 11, "font-size": 13 }, g).textContent = n.label;
+    el("text", { class: "g-label", x: 0, y: h / 2 + 11, "font-size": 9.5, fill: "#93a0ae" }, g)
+      .textContent = n.modo === "fijo" ? "mantenido" : n.modo === "auto" ? (n.corriendo ? "corriendo" : "automático") : "pulso";
+    el("line", { class: "g-stub", x1: w / 2, y1: 0, x2: outX(n), y2: 0 }, g);
+  } else if (n.type === "ff") {
+    const w = bodyW(n), h = bodyH(n), izq = -w / 2, der = w / 2, arr = -h / 2;
+    el("rect", { class: "g-body", x: izq, y: arr, width: w, height: h, rx: 3 }, g);
+    // franja de encabezado: tipo, nombre y el estado actual de Q
+    el("line", { class: "g-stub", x1: izq, y1: arr + FF_CAB, x2: der, y2: arr + FF_CAB }, g);
+    el("text", { class: "g-label", x: izq + 9, y: arr + FF_CAB / 2, "font-size": 11.5,
+      "text-anchor": "start" }, g).textContent =
+      (BIESTABLES[n.kind] ? BIESTABLES[n.kind].nombre : "FF") + " " + n.label;
+    el("circle", { cx: der - 12, cy: arr + FF_CAB / 2, r: 5,
+      fill: n.q ? "#12a150" : "#eef1f4", stroke: n.q ? "#0b7a3c" : "#c3cbd3", "stroke-width": 1.4 }, g);
+    if (n.conClk === false)
+      el("text", { class: "g-label", x: 0, y: h / 2 + 11, "font-size": 9.5, fill: "#93a0ae" }, g)
+        .textContent = "sin clock";
+    // entradas
+    for (let i = 0; i < nIn(n); i++) {
+      const y = pinPoint(n, i).y - n.y;
+      el("line", { class: "g-stub", x1: inX(n), y1: y, x2: izq, y2: y }, g);
+      if (n.pins[i].clk) {                              // triángulo de flanco, sin texto
+        el("path", { class: "g-stub", d: `M ${izq} ${y - 6} L ${izq + 10} ${y} L ${izq} ${y + 6}` }, g);
+      } else {
+        el("text", { class: "g-label", x: izq + 10, y, "font-size": 12, "text-anchor": "start" }, g)
+          .textContent = n.pins[i].n;
+      }
+    }
+    // salidas: siempre con el nombre del biestable, la negada con su barra
+    const nombres = [n.salida + n.label, n.salidaNeg + n.label];
+    for (let i = 0; i < 2; i++) {
+      const y = pinPoint(n, "o" + i).y - n.y, enc = valorDe(n.id, i);
+      el("line", { class: "g-stub", x1: der, y1: y, x2: outX(n), y2: y }, g);
+      const t = el("text", { class: "g-label", x: der - 10, y, "font-size": 12, "text-anchor": "end",
+        fill: enc ? "#0b7a3c" : "#101418" }, g);
+      t.textContent = nombres[i];
+      if (i === 1) {
+        let an = nombres[1].length * 6.6;
+        try { an = t.getComputedTextLength() || an; } catch (e) {}
+        el("line", { class: "g-stub", "stroke-width": 1.1, x1: der - 10 - an, y1: y - 8.5,
+          x2: der - 10, y2: y - 8.5, stroke: enc ? "#0b7a3c" : "#101418" }, g);
+      }
+    }
   } else if (n.type === "label") {
     el("text", { class: "g-label", x: 0, y: 0, "font-size": n.font || 14 }, g).textContent = n.label;
     el("rect", { x: -T.label.w / 2, y: -T.label.h / 2, width: T.label.w, height: T.label.h, fill: "transparent" }, g);
@@ -679,7 +893,7 @@ function renderNode(n) {
 }
 function renderWire(w) {
   if (!w.pts) return;
-  const on = VAL.get(w.from.id) === 1;
+  const on = valorDe(w.from.id, idxSalida(w.from.pin || "o"));
   const g = el("g", { "data-wid": w.id }, gWires);
   el("path", { class: "wire-hit", d: pathD(w.pts) }, g);
   el("path", { class: "wire" + (on ? " hi" : "") + (S.selW.includes(w.id) ? " sel" : ""), d: pathD(w.pts) }, g);
@@ -688,22 +902,36 @@ function ocupada(id, pin) { return S.wires.some(w => w.to.id === id && w.to.pin 
 function renderPins() {
   const conectando = drag && drag.kind === "connect";
   const ids = new Set(S.sel);
-  const list = (S.mode === "connect" || conectando) ? S.nodes
-    : S.nodes.filter(n => ids.has(n.id) || n.id === hoverNode);
+  // los pines aparecen al pasar el mouse por encima, y todos mientras estás cableando
+  const list = conectando ? S.nodes : S.nodes.filter(n => ids.has(n.id) || n.id === hoverNode);
   for (const n of list) {
     if (n.type === "label") continue;
-    if (n.type !== "in") for (let i = 0; i < nIn(n); i++) {
-      const p = pinPoint(n, i);
-      el("circle", { class: "pin" + (ocupada(n.id, i) ? " taken" : ""), cx: p.x, cy: p.y, r: 5,
-        "data-pid": n.id, "data-pin": i }, gOv);
-    }
-    if (n.type !== "out") {
-      const p = pinPoint(n, "o");
-      el("circle", { class: "pin", cx: p.x, cy: p.y, r: 5, "data-pid": n.id, "data-pin": "o" }, gOv);
-    }
+    const ponerPin = (p, clave, extra) => {
+      el("circle", { class: "pin-hit", cx: p.x, cy: p.y, r: 11, "data-pid": n.id, "data-pin": clave }, gOv);
+      el("circle", { class: "pin" + (extra || ""), cx: p.x, cy: p.y, r: 5.5, "data-pid": n.id, "data-pin": clave }, gOv);
+    };
+    if (n.type !== "in" && n.type !== "clk") for (let i = 0; i < nIn(n); i++)
+      ponerPin(pinPoint(n, i), i, ocupada(n.id, i) ? " taken" : "");
+    for (let i = 0; i < nOut(n); i++) ponerPin(pinPoint(n, "o" + i), "o" + i, "");
   }
 }
 let hoverNode = null;
+/* Los pines viven por fuera del cuerpo, así que el hover se mide por cercanía:
+   si el puntero está sobre la compuerta o sobre sus patitas, los pines siguen visibles. */
+function nodoCerca(w, margen) {
+  const m = margen === undefined ? 10 : margen;
+  let best = null, mejorDist = 1e9;
+  for (const n of S.nodes) {
+    if (n.type === "label") continue;
+    const R = rectOf(n);
+    const dx = Math.max(R.l - m - w.x, 0, w.x - (R.r + m));
+    const dy = Math.max(R.t - m - w.y, 0, w.y - (R.b + m));
+    if (dx > 0 || dy > 0) continue;
+    const d = Math.hypot(w.x - n.x, w.y - n.y);
+    if (d < mejorDist) { mejorDist = d; best = n.id; }
+  }
+  return best;
+}
 function render() {
   correr(); routeAll();
   gWires.textContent = ""; gNodes.textContent = ""; gOv.textContent = "";
@@ -711,7 +939,7 @@ function render() {
   $("#gridbg").style.display = S.showGrid ? "" : "none";
   for (const w of S.wires) renderWire(w);
   for (const d of junctionDots())
-    el("circle", { class: "dot" + (VAL.get(d.id) === 1 ? " hi" : ""), cx: d.p.x, cy: d.p.y, r: 4 }, gWires);
+    el("circle", { class: "dot" + (valorDe(d.id, d.i) ? " hi" : ""), cx: d.p.x, cy: d.p.y, r: 4 }, gWires);
   for (const n of S.nodes) renderNode(n);
   renderPins();
   if (drag && drag.kind === "connect" && drag.cur)
@@ -750,18 +978,32 @@ function renderInspector() {
   }
   if (nsel.length) {
     const n = nsel[0];
-    h += `<div class="sec"><h3>${T[n.type].nombre}${nsel.length > 1 ? " (" + nsel.length + ")" : ""}</h3>`;
+    const titulo = n.type === "ff" ? "Biestable " + BIESTABLES[n.kind].nombre : T[n.type].nombre;
+    h += `<div class="sec"><h3>${titulo}${nsel.length > 1 ? " (" + nsel.length + ")" : ""}</h3>`;
     h += `<div class="row"><label>Nombre</label><div class="fill"><input type="text" id="n-label" value="${esc(n.label || "")}" placeholder="${n.type === "in" ? "A" : n.type === "out" ? "S" : "opcional"}"></div></div>`;
-    if (T[n.type].var)
+    if (T[n.type].var && n.type !== "ff")
       h += `<div class="row"><label>Entradas</label><div class="fill"><select id="n-pins">
         ${[2,3,4,5].map(k => `<option value="${k}"${k === nIn(n) ? " selected" : ""}>${k}</option>`).join("")}</select></div></div>`;
     if (n.type === "in")
       h += `<div class="row"><label>Valor</label><div class="fill"><button class="btn" id="n-toggle" style="width:100%">${n.on ? "1 — pasar a 0" : "0 — pasar a 1"}</button></div></div>`;
+    if (n.type === "clk") {
+      h += `<div class="row"><label>Modo</label><div class="fill"><select id="clk-modo">
+          <option value="pulso"${n.modo === "pulso" ? " selected" : ""}>Pulso (un flanco)</option>
+          <option value="fijo"${n.modo === "fijo" ? " selected" : ""}>Mantenido (toggle)</option>
+          <option value="auto"${n.modo === "auto" ? " selected" : ""}>Automático</option></select></div></div>`;
+      if (n.modo === "fijo") h += `<div class="io-row"><span class="io-name">Nivel</span>
+        <span class="sw${n.on ? " on" : ""}" data-sw="${n.id}" role="button" tabindex="0"></span>
+        <span class="bit${n.on ? " on" : ""}">${n.on ? 1 : 0}</span></div>`;
+      if (n.modo === "auto") h += `<div class="row"><div class="fill"><button class="btn" id="clk-run" style="width:100%">
+        ${n.corriendo ? "Frenar el reloj" : "Arrancar el reloj"}</button></div></div>`;
+      h += `<div class="hint">En <b>mantenido</b> el toggle deja la señal en 1 hasta que la vuelvas a tocar; en la hoja alcanza con hacerle clic.</div>`;
+    }
     h += `<div class="row"><label>Posición</label><div class="fill" style="display:flex;gap:6px">
       <input type="number" id="n-x" step="${S.grid}" value="${Math.round(n.x)}">
       <input type="number" id="n-y" step="${S.grid}" value="${Math.round(n.y)}"></div></div>`;
     h += `<div class="iconbar" style="margin-top:10px">
       <button class="btn" id="n-dup">Duplicar</button><button class="btn" id="n-del">Borrar</button></div></div>`;
+    if (n.type === "ff") h += panelBiestable(n);
   }
   // panel de control siempre visible
   const ins = S.nodes.filter(n => n.type === "in"), outs = S.nodes.filter(n => n.type === "out");
@@ -772,7 +1014,7 @@ function renderInspector() {
       <span class="bit${n.on ? " on" : ""}">${n.on ? 1 : 0}</span></div>`).join("")
     : `<div class="hint">Todavía no hay interruptores. Insertá uno con <kbd>I</kbd>.</div>`;
   h += `</div><div class="sec"><h3>Salidas</h3>`;
-  h += outs.length ? outs.map(n => { const v = VAL.get(n.id) === 1;
+  h += outs.length ? outs.map(n => { const v = valorDe(n.id, 0);
       return `<div class="io-row"><span class="io-name">${esc(n.label)}</span>
         <span class="lamp${v ? " on" : ""}"></span><span class="bit${v ? " on" : ""}">${v ? 1 : 0}</span></div>`; }).join("")
     : `<div class="hint">Agregá una salida con <kbd>O</kbd> para ver el resultado.</div>`;
@@ -782,6 +1024,54 @@ function renderInspector() {
       <span style="font-size:11px">Arrastrá de un pin a otro para cablear.</span></div>`;
   box.innerHTML = h;
   wireInspector(nsel, wsel);
+}
+function panelBiestable(n) {
+  const idx = datosDe(n), d = idx.length, tab = tablaDe(n);
+  const custom = n.kind === "custom";
+  const nom = idx.map(i => n.pins[i].n);
+  let h = `<div class="sec"><h3>Patas y salidas</h3>`;
+  n.pins.forEach((p, i) => {
+    h += `<div class="row"><label>${p.clk ? "Reloj" : "Entrada " + (idx.indexOf(i) + 1)}</label>
+      <div class="fill"><input type="text" data-pin="${i}" class="pin-name" value="${esc(p.n)}"></div></div>`;
+  });
+  h += `<div class="row"><label>Salida</label><div class="fill" style="display:flex;gap:6px">
+      <input type="text" id="ff-out" value="${esc(n.salida)}"><input type="text" id="ff-outn" value="${esc(n.salidaNeg)}"></div></div>
+    <div class="hint">Las salidas se dibujan como <b>${esc(n.salida + n.label)}</b> y <b>${esc(n.salidaNeg + n.label)}</b> (con barra de negado): siempre llevan el nombre del biestable.</div>`;
+  h += `<div class="row" style="margin-top:8px"><label>Reloj</label><div class="fill"><select id="ff-clk">
+      <option value="1"${n.conClk !== false ? " selected" : ""}>Con clock (por flanco)</option>
+      <option value="0"${n.conClk === false ? " selected" : ""}>Sin clock (continuo)</option></select></div></div>`;
+  if (custom) h += `<div class="row"><label>Nº entradas</label><div class="fill"><select id="ff-nin">
+      ${[1,2,3].map(k => `<option value="${k}"${k === d ? " selected" : ""}>${k}</option>`).join("")}</select></div></div>`;
+  h += `<div class="row"><label>Estado Q</label><div class="fill">
+      <button class="btn" id="ff-q" style="width:100%">${n.q ? "1 — poner en 0" : "0 — poner en 1"}</button></div></div></div>`;
+
+  // ---- tabla característica ----
+  h += `<div class="sec"><h3>Tabla de verdad</h3><table class="tt"><thead><tr>` +
+    nom.map(x => `<th>${esc(x)}</th>`).join("") + `<th>Q</th><th class="sep">Q⁺</th></tr></thead><tbody>`;
+  for (let k = 0; k < tab.length; k++) {
+    const q = k & 1, bits = k >> 1;
+    const cel = tab[k] === null || tab[k] === undefined ? "—" : tab[k];
+    h += `<tr>` +
+      Array.from({ length: d }, (_, i) => `<td>${(bits >> (d - 1 - i)) & 1}</td>`).join("") +
+      `<td>${q}</td><td class="sep ${cel === 1 ? "v1" : ""}${custom ? " edit" : ""}"
+        ${custom ? `data-tab="${k}"` : ""}>${cel}</td></tr>`;
+  }
+  h += `</tbody></table>`;
+  h += custom ? `<div class="hint" style="margin-top:8px">Tocá cada Q⁺ para ciclar 0 → 1 → — (indefinido). El circuito usa esta tabla en cada flanco.</div>`
+    : `<div class="hint" style="margin-top:8px">${BIESTABLES[n.kind].nota}.</div>`;
+  h += `</div>`;
+
+  // ---- tabla de excitación ----
+  h += `<div class="sec"><h3>Tabla de excitación</h3><table class="tt"><thead><tr>
+    <th>Q</th><th>Q⁺</th>` + nom.map(x => `<th class="sep">${esc(x)}</th>`).join("") + `</tr></thead><tbody>`;
+  excitacion(n).forEach((f, r) => {
+    h += `<tr><td>${f.q}</td><td>${f.qn}</td>` + f.patron.map((v, i) =>
+      `<td class="sep${custom ? " edit" : ""}"${custom ? ` data-exc="${r}" data-col="${i}"` : ""}>${v}</td>`).join("") + `</tr>`;
+  });
+  h += `</tbody></table><div class="hint" style="margin-top:8px">
+    ${custom ? "Tocá una celda para ciclar 0 → 1 → X. Al editarla se actualiza la tabla de verdad, porque son la misma información leída al revés."
+             : "Qué hay que poner en las entradas para lograr cada transición. X = indistinto."}</div></div>`;
+  return h;
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function lock(fn) { inspLock = true; try { fn(); } finally { inspLock = false; } }
@@ -796,14 +1086,14 @@ function wireInspector(nsel, wsel) {
   live("n-x", v => nsel.forEach(n => n.x = +v));
   live("n-y", v => nsel.forEach(n => n.y = +v));
   const pins = document.getElementById("n-pins");
-  if (pins) pins.onchange = () => lock(() => {
+  if (pins) pins.onchange = () => {
     nsel.forEach(n => {
       const k = +pins.value;
       S.wires = S.wires.filter(w => !(w.to.id === n.id && w.to.pin >= k));
       n.pins = k;
     });
     commit(); render();
-  });
+  };
   const bind = (id, fn) => { const e = document.getElementById(id); if (e) e.onclick = () => { fn(); commit(); render(); }; };
   bind("n-toggle", () => nsel.forEach(n => { if (n.type === "in") n.on = !n.on; }));
   bind("n-dup", duplicar);
@@ -811,6 +1101,65 @@ function wireInspector(nsel, wsel) {
   bind("w-del", borrar);
   bind("w-alt", () => wsel.forEach(w => w.variant = (w.variant || 0) + 1));
   bind("w-reset", () => wsel.forEach(w => w.variant = 0));
+  document.querySelectorAll(".pin-name").forEach(inp => {
+    inp.addEventListener("keydown", ev => ev.stopPropagation());
+    inp.addEventListener("input", () => lock(() => { nsel[0].pins[+inp.dataset.pin].n = inp.value; render(); }));
+    inp.addEventListener("change", commit);
+  });
+  const bindTxt = (id, fn) => {
+    const e = document.getElementById(id); if (!e) return;
+    e.addEventListener("keydown", ev => ev.stopPropagation());
+    e.addEventListener("input", () => lock(() => { fn(e.value); render(); }));
+    e.addEventListener("change", commit);
+  };
+  bindTxt("ff-out", v => nsel[0].salida = v);
+  bindTxt("ff-outn", v => nsel[0].salidaNeg = v);
+  const nin = document.getElementById("ff-nin");
+  if (nin) nin.onchange = () => {
+    const n = nsel[0], k = +nin.value, viejos = datosDe(n).map(i => n.pins[i]);
+    const pins = [];
+    for (let i = 0; i < k; i++) pins.push(viejos[i] || { n: String.fromCharCode(88 + i) });
+    if (n.conClk !== false) pins.push({ n: "CLK", clk: true });
+    S.wires = S.wires.filter(w => !(w.to.id === n.id && w.to.pin >= pins.length));
+    n.pins = pins; n.tabla = null; tablaDe(n);
+    commit(); render();
+  };
+  const cm = document.getElementById("clk-modo");
+  if (cm) cm.onchange = () => {
+    nsel.forEach(n => { n.modo = cm.value; n.corriendo = false; n.on = false; });
+    commit(); render();
+  };
+  const crun = document.getElementById("clk-run");
+  if (crun) crun.onclick = () => { nsel[0].corriendo = !nsel[0].corriendo; commit(); render(); };
+  const fclk = document.getElementById("ff-clk");
+  if (fclk) fclk.onchange = () => {
+    const n = nsel[0], quiere = fclk.value === "1";
+    if (quiere === (n.conClk !== false)) return;
+    S.wires = S.wires.filter(w => w.to.id !== n.id);          // cambian las patas: se sueltan los cables
+    n.conClk = quiere;
+    const datos = datosDe(n).map(i => n.pins[i]);
+    n.pins = quiere ? datos.concat([{ n: "CLK", clk: true }]) : datos;
+    n.clkArranque = false;
+    commit(); render();
+  };
+  const bq = document.getElementById("ff-q");
+  if (bq) bq.onclick = () => { nsel[0].q = nsel[0].q ? 0 : 1; commit(); render(); };
+  document.querySelectorAll("[data-tab]").forEach(td => {
+    td.onclick = () => {
+      const n = nsel[0], k = +td.dataset.tab, v = n.tabla[k];
+      n.tabla[k] = v === 0 ? 1 : v === 1 ? null : 0;      // 0 → 1 → indefinido
+      commit(); render();
+    };
+  });
+  document.querySelectorAll("[data-exc]").forEach(td => {
+    td.onclick = () => {
+      const n = nsel[0], filas = excitacion(n), f = filas[+td.dataset.exc], c = +td.dataset.col;
+      const v = f.patron[c];
+      f.patron[c] = v === "0" ? "1" : v === "1" ? "X" : "0";
+      aplicarExcitacion(n, f, f.patron);
+      commit(); render();
+    };
+  });
   document.querySelectorAll("[data-sw]").forEach(sw => {
     sw.onclick = () => { const n = getNode(sw.dataset.sw); if (n) { n.on = !n.on; commit(); render(); } };
     sw.onkeydown = ev => { if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); sw.onclick(); } };
@@ -841,11 +1190,32 @@ function toWorld(ev) {
   return { x: (ev.clientX - r.left - S.pan.x) / S.zoom, y: (ev.clientY - r.top - S.pan.y) / S.zoom };
 }
 const hitNode = (t) => { const g = t.closest ? t.closest("[data-id]") : null; return g ? g.getAttribute("data-id") : null; };
+/* Si venís de una salida busco la entrada libre más cercana (y si no hay libres,
+   la más cercana, que se reemplaza); si venís de una entrada, la salida. */
+function pinDestino(n, w, desdeSalida) {
+  if (desdeSalida) {
+    if (n.type === "in" || n.type === "clk" || !nIn(n)) return null;
+    let cerca = null, dc = 1e9, libre = null, dl = 1e9;
+    for (let i = 0; i < nIn(n); i++) {
+      const q = pinPoint(n, i), d = Math.hypot(q.x - w.x, q.y - w.y);
+      if (d < dc) { dc = d; cerca = i; }
+      if (!ocupada(n.id, i) && d < dl) { dl = d; libre = i; }
+    }
+    return libre !== null ? libre : cerca;
+  }
+  if (!nOut(n)) return null;
+  let mejor = null, dm = 1e9;
+  for (let i = 0; i < nOut(n); i++) {
+    const q = pinPoint(n, "o" + i), d = Math.hypot(q.x - w.x, q.y - w.y);
+    if (d < dm) { dm = d; mejor = "o" + i; }
+  }
+  return mejor;
+}
 function pinCercano(n, w) {
-  let best = "o", bd = 1e9;
+  let best = "o0", bd = 1e9;
   const cand = [];
-  if (n.type !== "out") cand.push("o");
-  if (n.type !== "in") for (let i = 0; i < nIn(n); i++) cand.push(i);
+  for (let i = 0; i < nOut(n); i++) cand.push("o" + i);
+  if (n.type !== "in" && n.type !== "clk") for (let i = 0; i < nIn(n); i++) cand.push(i);
   for (const p of cand) {
     const q = pinPoint(n, p), d = Math.hypot(q.x - w.x, q.y - w.y);
     if (d < bd) { bd = d; best = p; }
@@ -859,7 +1229,7 @@ svg.addEventListener("pointerdown", ev => {
     drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, px: S.pan.x, py: S.pan.y };
     svg.classList.add("panning"); return;
   }
-  if (t.classList && t.classList.contains("pin")) {
+  if (t.getAttribute && t.getAttribute("data-pid")) {
     const id = t.getAttribute("data-pid"), pin = t.getAttribute("data-pin");
     const n = getNode(id), p = pin === "o" ? "o" : +pin;
     drag = { kind: "connect", fromId: id, fromPin: p, start: pinPoint(n, p), cur: w };
@@ -874,11 +1244,6 @@ svg.addEventListener("pointerdown", ev => {
   }
   const nid = hitNode(t);
   if (nid) {
-    if (S.mode === "connect") {
-      const n = getNode(nid), p = pinCercano(n, w);
-      drag = { kind: "connect", fromId: nid, fromPin: p, start: pinPoint(n, p), cur: w };
-      render(); return;
-    }
     if (ev.shiftKey) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
     else if (!S.sel.includes(nid)) { S.sel = [nid]; S.selW = []; }
     drag = { kind: "move", w0: w, orig: S.sel.map(id => { const n = getNode(id); return { id, x: n.x, y: n.y }; }), moved: false, nid };
@@ -891,7 +1256,7 @@ svg.addEventListener("pointerdown", ev => {
 svg.addEventListener("pointermove", ev => {
   const w = toWorld(ev);
   if (!drag) {
-    const nid = hitNode(ev.target);
+    const nid = nodoCerca(w);
     if (nid !== hoverNode) { hoverNode = nid; render(); }
     return;
   }
@@ -911,12 +1276,20 @@ svg.addEventListener("pointerup", ev => {
   if (drag.kind === "connect") {
     const t = document.elementFromPoint(ev.clientX, ev.clientY);
     let id = null, pin = null;
-    if (t && t.classList && t.classList.contains("pin")) {
+    if (t && t.getAttribute && t.getAttribute("data-pid")) {          // justo sobre un pin
       id = t.getAttribute("data-pid");
-      pin = t.getAttribute("data-pin") === "o" ? "o" : +t.getAttribute("data-pin");
+      const v = t.getAttribute("data-pin");
+      pin = esSalida(v) ? v : +v;
     } else {
-      const nid = t ? hitNode(t) : null;
-      if (nid) { id = nid; pin = pinCercano(getNode(nid), w); }
+      // sobre el cuerpo, o cerca: elijo la pata que tiene sentido para este cable
+      const nid = (t ? hitNode(t) : null) || nodoCerca(w, 16);
+      if (nid && nid !== drag.fromId) {
+        const n = getNode(nid);
+        pin = pinDestino(n, w, esSalida(drag.fromPin));
+        if (pin === null) toast(esSalida(drag.fromPin)
+          ? "Ese elemento no tiene entradas" : "Ese elemento no tiene salida");
+        else id = nid;
+      }
     }
     if (id && id !== drag.fromId) conectar(drag.fromId, drag.fromPin, id, pin);
   } else if (drag.kind === "band") {
@@ -930,20 +1303,38 @@ svg.addEventListener("pointerup", ev => {
     }
   } else if (drag.kind === "move") {
     if (drag.moved) commit();
-    else {                                   // clic seco sobre un interruptor: lo cambia
+    else {
       const n = getNode(drag.nid);
       if (n && n.type === "in") { n.on = !n.on; commit(); }
+      else if (n && n.type === "clk") {
+        if (n.modo === "fijo") { n.on = !n.on; commit(); }         // queda mantenido
+        else if (n.modo === "auto") { n.corriendo = !n.corriendo; commit(); }
+        else pulso(n);                                             // un flanco y vuelve a 0
+      }
     }
   }
   svg.classList.remove("panning");
   drag = null; render();
 });
+function pulso(n) {
+  n.on = true; render();
+  setTimeout(() => { n.on = false; commit(); render(); }, 140);
+}
+/* Los relojes en automático laten solos; se frenan mientras arrastrás algo. */
+const PERIODO = 400;
+setInterval(() => {
+  if (drag) return;
+  const activos = S.nodes.filter(n => n.type === "clk" && n.modo === "auto" && n.corriendo);
+  if (!activos.length) return;
+  activos.forEach(n => n.on = !n.on);
+  render();
+}, PERIODO);
 function conectar(fromId, fromPin, toId, toPin) {
   let a = { id: fromId, pin: fromPin }, b = { id: toId, pin: toPin };
-  if (a.pin !== "o" && b.pin === "o") { const c = a; a = b; b = c; }   // se cableó al revés
-  if (a.pin !== "o" || b.pin === "o") { toast("Un cable va de una salida a una entrada"); return; }
+  if (!esSalida(a.pin) && esSalida(b.pin)) { const c = a; a = b; b = c; }   // se cableó al revés
+  if (!esSalida(a.pin) || esSalida(b.pin)) { toast("Un cable va de una salida a una entrada"); return; }
   S.wires = S.wires.filter(w => !(w.to.id === b.id && w.to.pin === b.pin));  // una entrada, un cable
-  S.wires.push({ id: uid("w"), from: { id: a.id }, to: { id: b.id, pin: b.pin }, variant: 0 });
+  S.wires.push({ id: uid("w"), from: { id: a.id, pin: a.pin }, to: { id: b.id, pin: b.pin }, variant: 0 });
   commit();
 }
 svg.addEventListener("dblclick", ev => {
@@ -963,15 +1354,30 @@ svg.addEventListener("wheel", ev => {
 }, { passive: false });
 
 /* ======================= paleta ======================= */
-const PALETA = [
-  ["and", "1"], ["or", "2"], ["not", "3"], ["nand", "4"], ["nor", "5"], ["xor", "6"], ["xnor", "7"],
-  "sep", ["in", "I"], ["out", "O"], ["buf", "B"], ["label", "L"]
+const GRUPOS = [
+  { nombre: "Circuitos lógicos", abierto: true, items: [
+    ["and", "1"], ["or", "2"], ["not", "3"], ["nand", "4"], ["nor", "5"], ["xor", "6"], ["xnor", "7"],
+    ["buf", "B"], ["in", "I"], ["out", "O"], ["label", "L"] ] },
+  { nombre: "Biestables · sin clock", abierto: false, items: [
+    ["ff:rs-sin", ""], ["ff:jk-sin", ""], ["ff:d-sin", ""], ["ff:t-sin", ""], ["ff:custom-sin", ""] ] },
+  { nombre: "Biestables · con clock", abierto: false, items: [
+    ["ff:rs", ""], ["ff:jk", ""], ["ff:d", ""], ["ff:t", ""], ["ff:custom", ""], ["clk", "P"] ] }
 ];
+const nombreDe = (t) => t.indexOf(":") > 0
+  ? "Biestable " + BIESTABLES[t.split(":")[1].split("-")[0]].nombre : T[t].nombre;
 function iconoDe(type) {
+  if (type.indexOf("ff") === 0) {                 // antes de tocar T[type]: "ff:jk" no está en T
+    const p = type.split(":")[1].split("-"), k = p[0], sinClk = p[1] === "sin";
+    const disparo = sinClk ? "" : `<path class="glyph-wire" d="M7 16l4-2.5-4-2.5"/>`;
+    return `<path class="glyph-wire" d="M1 7h6M1 16h6M33 7h6M33 16h6"/>` +
+      `<rect class="glyph-body" x="7" y="2" width="26" height="19"/>` + disparo +
+      `<text x="20" y="9" font-size="8.5" font-family="Arial" text-anchor="middle" dominant-baseline="central" fill="currentColor" stroke="none">${BIESTABLES[k].nombre}</text>`;
+  }
   const w = 26, h = 17, bub = T[type].bubble ? 3.2 : 0;
   if (type === "in") return `<rect class="glyph-body" x="4" y="4" width="24" height="15" rx="7.5"/><circle cx="20" cy="11.5" r="4" fill="currentColor"/><path class="glyph-wire" d="M28 11.5h8"/>`;
   if (type === "out") return `<path class="glyph-wire" d="M2 11.5h8"/><circle class="glyph-body" cx="20" cy="11.5" r="9"/>`;
   if (type === "label") return `<path class="glyph-wire" d="M9 6h18M18 6v12"/>`;
+  if (type === "clk") return `<path class="glyph-wire" d="M2 16h5v-9h6v9h6v-9h6"/><path class="glyph-wire" d="M31 11.5h5"/>`;
   const extra = (type === "xor" || type === "xnor")
     ? `<path class="glyph-wire" d="M${8 - 3} ${11.5 - h / 2} Q ${8 - 3 + w * .30} 11.5 ${8 - 3} ${11.5 + h / 2}"/>` : "";
   const ins = type === "not" || type === "buf" ? [11.5] : [11.5 - 4.5, 11.5 + 4.5];
@@ -983,14 +1389,26 @@ function iconoDe(type) {
 }
 (function armarPaleta() {
   const p = $("#palette");
-  for (const it of PALETA) {
-    if (it === "sep") { const d = document.createElement("div"); d.className = "sep"; p.appendChild(d); continue; }
-    const [type, key] = it;
-    const b = document.createElement("button");
-    b.className = "ptool"; b.dataset.add = type;
-    b.innerHTML = `<svg viewBox="0 0 40 23">${iconoDe(type)}</svg><span>${T[type].nombre}</span><kbd>${key}</kbd>`;
-    b.onclick = () => setPendiente(pendiente === type ? null : type);
-    p.appendChild(b);
+  for (const gr of GRUPOS) {
+    const cab = document.createElement("button");
+    cab.className = "pgroup" + (gr.abierto ? " abierto" : "");
+    cab.innerHTML = `<svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><span>${gr.nombre}</span>`;
+    const caja = document.createElement("div");
+    caja.className = "plist";
+    caja.style.display = gr.abierto ? "" : "none";
+    cab.onclick = () => {
+      const ver = caja.style.display === "none";
+      caja.style.display = ver ? "" : "none";
+      cab.classList.toggle("abierto", ver);
+    };
+    for (const [type, key] of gr.items) {
+      const b = document.createElement("button");
+      b.className = "ptool"; b.dataset.add = type;
+      b.innerHTML = `<svg viewBox="0 0 40 23">${iconoDe(type)}</svg><span>${nombreDe(type)}</span><kbd>${key}</kbd>`;
+      b.onclick = () => setPendiente(pendiente === type ? null : type);
+      caja.appendChild(b);
+    }
+    p.appendChild(cab); p.appendChild(caja);
   }
 })();
 function setPendiente(t) {
@@ -1082,11 +1500,43 @@ function mostrarTabla() {
 }
 
 /* ======================= exportar ======================= */
+/* Pasa las clases a atributos de presentación: así el SVG se ve igual en cualquier
+   visor, aunque no interprete la hoja de estilos. */
+const ESTILO_EXPORT = {
+  "g-body":  { fill: "#fff", stroke: "#101418", "stroke-width": 1.7, "stroke-linejoin": "round" },
+  "g-stub":  { fill: "none", stroke: "#101418", "stroke-width": 1.5 },
+  "g-label": { "font-family": "Arial,Helvetica,sans-serif", fill: "#101418",
+               "text-anchor": "middle", "dominant-baseline": "central" },
+  "wire":    { fill: "none", stroke: "#9aa5ae", "stroke-width": 1.8,
+               "stroke-linejoin": "round", "stroke-linecap": "round" },
+  "dot":     { fill: "#9aa5ae", stroke: "none" },
+  "led-off": { fill: "#eef1f4", stroke: "#101418", "stroke-width": 1.7 },
+  "led-on":  { fill: "#12a150", stroke: "#0b7a3c", "stroke-width": 1.7 },
+  "sw-track":{ fill: "#eef1f4", stroke: "#101418", "stroke-width": 1.7 },
+  "sw-knob": { fill: "#fff", stroke: "#101418", "stroke-width": 1.7 }
+};
+function inlinarEstilos(raiz) {
+  raiz.querySelectorAll("*").forEach(e => {
+    const cls = (e.getAttribute("class") || "").split(/\s+/).filter(Boolean);
+    if (!cls.length) return;
+    const at = {};
+    for (const c of cls) if (ESTILO_EXPORT[c]) Object.assign(at, ESTILO_EXPORT[c]);
+    if (cls.indexOf("hi") >= 0) Object.assign(at, cls.indexOf("dot") >= 0
+      ? { fill: "#12a150" } : { stroke: "#12a150", "stroke-width": 2.2 });
+    if (cls.indexOf("on") >= 0) {
+      if (cls.indexOf("sw-track") >= 0) at.fill = "#e4f6ec";
+      if (cls.indexOf("sw-knob") >= 0) { at.fill = "#12a150"; at.stroke = "#0b7a3c"; }
+    }
+    if (cls.indexOf("dashed") >= 0) at["stroke-dasharray"] = "6 4";
+    for (const k in at) if (!e.hasAttribute(k)) e.setAttribute(k, at[k]);
+    e.removeAttribute("class");
+  });
+}
 function buildExportSVG() {
   const b = bboxAll(), m = 28;
   const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
   const s = document.createElementNS(NS, "svg");
-  s.setAttribute("xmlns", NS); s.setAttribute("width", W); s.setAttribute("height", H);
+  s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
   const st = document.createElementNS(NS, "style");
   st.textContent = `.g-body{fill:#fff;stroke:#101418;stroke-width:1.7;stroke-linejoin:round}
@@ -1105,6 +1555,7 @@ function buildExportSVG() {
   const sn = S.sel, sw = S.selW; S.sel = []; S.selW = []; render();
   const gw = gWires.cloneNode(true), gn = gNodes.cloneNode(true);
   gw.querySelectorAll(".wire-hit").forEach(x => x.remove());
+  inlinarEstilos(gw); inlinarEstilos(gn);      // el SVG queda autosuficiente, sin depender del CSS
   s.appendChild(gw); s.appendChild(gn);
   S.sel = sn; S.selW = sw; render();
   return { svg: s, W, H };
@@ -1145,6 +1596,7 @@ $("#io-ok").onclick = () => {
   try {
     const d = JSON.parse($("#io-text").value);
     S.nodes = d.nodes || []; S.wires = (d.wires || []).map(w => Object.assign({ variant: 0 }, w));
+    S.nodes.forEach(n => { if (n.type === "ff") n.clkArranque = false; });
     uidc = S.nodes.length + S.wires.length + 100;
     S.sel = []; S.selW = []; VAL = new Map(); commit(); fit();
     $("#ov-io").classList.remove("show"); toast("Circuito cargado");
@@ -1152,16 +1604,6 @@ $("#io-ok").onclick = () => {
 };
 
 /* ======================= barra ======================= */
-function setMode(m) {
-  S.mode = m;
-  $("#m-select").classList.toggle("on", m === "select");
-  $("#m-connect").classList.toggle("on", m === "connect");
-  svg.classList.toggle("mode-connect", m === "connect");
-  $("#st-hint").textContent = m === "connect" ? "Arrastrá de una salida a una entrada" : "";
-  render();
-}
-$("#m-select").onclick = () => setMode("select");
-$("#m-connect").onclick = () => setMode("connect");
 $("#b-undo").onclick = undo; $("#b-redo").onclick = redo;
 $("#b-del").onclick = () => { borrar(); commit(); render(); };
 $("#b-dup").onclick = () => { duplicar(); commit(); render(); };
@@ -1181,7 +1623,8 @@ document.querySelectorAll(".overlay").forEach(o => o.addEventListener("click", e
 
 /* ======================= teclado ======================= */
 const ATAJOS = { "1": "and", "2": "or", "3": "not", "4": "nand", "5": "nor", "6": "xor", "7": "xnor",
-  "i": "in", "o": "out", "b": "buf", "l": "label" };
+  "i": "in", "o": "out", "b": "buf", "l": "label", "p": "clk",
+  "8": "ff:rs", "9": "ff:jk", "0": "ff:d" };
 window.addEventListener("keydown", ev => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
   const k = ev.key.toLowerCase();
@@ -1193,8 +1636,6 @@ window.addEventListener("keydown", ev => {
   if (ev.ctrlKey || ev.metaKey) return;
   if (k === "delete" || k === "backspace") { ev.preventDefault(); borrar(); commit(); render(); return; }
   if (k === "escape") { setPendiente(null); S.sel = []; S.selW = []; document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show")); render(); return; }
-  if (k === "v") return setMode("select");
-  if (k === "c") return setMode("connect");
   if (k === "t") return mostrarTabla();
   if (k === "f") return fit();
   if (ATAJOS[k]) return setPendiente(ATAJOS[k]);
@@ -1214,7 +1655,7 @@ function cargarEjemplo(cual) {
   S.nodes = []; S.wires = []; S.sel = []; S.selW = []; VAL = new Map(); uidc = 1;
   const K = {};
   const add = (k, type, x, y, ex) => { const n = makeNode(type, x, y, ex); K[k] = n.id; S.nodes.push(n); return n; };
-  const cab = (a, b, pin) => S.wires.push({ id: uid("w"), from: { id: K[a] }, to: { id: K[b], pin: pin || 0 }, variant: 0 });
+  const cab = (a, b, pin) => S.wires.push({ id: uid("w"), from: { id: K[a], pin: "o0" }, to: { id: K[b], pin: pin || 0 }, variant: 0 });
   if (cual === "half") {
     add("A", "in", 80, 140, { label: "A" }); add("B", "in", 80, 260, { label: "B" });
     add("X", "xor", 280, 160); add("Y", "and", 280, 280);
@@ -1235,6 +1676,27 @@ function cargarEjemplo(cual) {
     cab("R", "N1", 0); cab("N2", "N1", 1); cab("N1", "N2", 0); cab("S", "N2", 1);
     cab("N1", "Q"); cab("N2", "Qn");
     add("t", "label", 300, 60, { label: "Latch SR: prendé S y apagalo, Q se queda en 1" });
+  } else if (cual === "cont") {
+    add("P", "clk", 90, 200, { label: "CLK" });
+    add("U", "in", 90, 300, { label: "1", on: true });
+    add("F0", "ff:jk", 300, 200, { label: "0" });
+    add("F1", "ff:jk", 520, 200, { label: "1" });
+    add("Q0", "out", 460, 150, { label: "Q0" }); add("Q1", "out", 680, 150, { label: "Q1" });
+    cab("P", "F0", 1); cab("U", "F0", 0); cab("U", "F0", 2);
+    cab("U", "F1", 0); cab("U", "F1", 2);
+    S.wires.push({ id: uid("w"), from: { id: K.F0, pin: "o1" }, to: { id: K.F1, pin: 1 }, variant: 0 });
+    S.wires.push({ id: uid("w"), from: { id: K.F0, pin: "o0" }, to: { id: K.Q0, pin: 0 }, variant: 0 });
+    S.wires.push({ id: uid("w"), from: { id: K.F1, pin: "o0" }, to: { id: K.Q1, pin: 0 }, variant: 0 });
+    add("t", "label", 380, 90, { label: "Contador de 2 bits: apretá el pulso de reloj" });
+  } else if (cual === "regd") {
+    add("D", "in", 90, 200, { label: "D" });
+    add("P", "clk", 90, 300, { label: "CLK" });
+    add("F", "ff:d", 300, 240, { label: "A" });
+    add("Q", "out", 470, 210, { label: "Q" }); add("Qn", "out", 470, 290, { label: "Qneg" });
+    cab("D", "F", 0); cab("P", "F", 1);
+    S.wires.push({ id: uid("w"), from: { id: K.F, pin: "o0" }, to: { id: K.Q, pin: 0 }, variant: 0 });
+    S.wires.push({ id: uid("w"), from: { id: K.F, pin: "o1" }, to: { id: K.Qn, pin: 0 }, variant: 0 });
+    add("t", "label", 300, 120, { label: "El valor de D se copia recién en el flanco de reloj" });
   } else if (cual === "mux") {
     add("A", "in", 60, 100, { label: "D0" }); add("B", "in", 60, 200, { label: "D1" }); add("Sel", "in", 60, 340, { label: "Sel" });
     add("N", "not", 220, 340); add("A1", "and", 400, 120); add("A2", "and", 400, 260);
@@ -1242,12 +1704,12 @@ function cargarEjemplo(cual) {
     cab("Sel", "N", 0); cab("A", "A1", 0); cab("N", "A1", 1);
     cab("B", "A2", 0); cab("Sel", "A2", 1); cab("A1", "O", 0); cab("A2", "O", 1); cab("O", "Y");
   }
+  S.nodes.forEach(n => { if (n.type === "ff") n.clkArranque = false; });
   commit(); fit();
 }
 
 /* ======================= arranque ======================= */
 cargarEjemplo("full");
-setMode("select");
 lastSnap = snapshot();
 window.addEventListener("resize", render);
 </script>

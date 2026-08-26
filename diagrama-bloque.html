@@ -140,6 +140,7 @@ textarea{width:100%;height:200px;font-family:var(--mono);font-size:11px;border:1
 .n-math{font-family:var(--draw);fill:#101418;text-anchor:start;dominant-baseline:central;
   pointer-events:none;user-select:none;white-space:pre}
 .n-bar{stroke:#101418;stroke-width:1.4;fill:none}
+.n-paren{stroke:#101418;stroke-width:1.25;fill:none;stroke-linecap:round}
 .n-sign{font-family:var(--draw);fill:#101418;text-anchor:middle;dominant-baseline:central;
   pointer-events:none;user-select:none;font-size:13px}
 .n-cross{stroke:#101418;stroke-width:1.4;fill:none}
@@ -302,8 +303,11 @@ textarea{width:100%;height:200px;font-family:var(--mono);font-size:11px;border:1
     <tr><td>Bifurcación</td><td>Elegí la herramienta y hacé clic en una flecha: se inserta en el medio y parte la línea en dos</td></tr>
     <tr><td>Arrastrar desde un punto azul</td><td>Crea una flecha hacia otro elemento (o soltala en el vacío para cancelar)</td></tr>
     <tr><td>Doble clic</td><td>Renombrar el elemento</td></tr>
-    <tr><td>Ecuaciones</td><td><kbd>K/(s+1)</kbd> apila la fracción · <kbd>s^2</kbd> exponente ·
-      <kbd>H_2</kbd> subíndice · <kbd>\omega \zeta \tau</kbd> griegas · <kbd>\frac{a}{b}</kbd> forzado.
+    <tr><td>Ecuaciones</td><td><kbd>K/(s+1)</kbd> apila la fracción, y también adentro de paréntesis:
+      <kbd>(G_2/H_1)*(G_4/H_2)</kbd>. Las divisiones seguidas se juntan en una sola fracción
+      (<kbd>a/b/c</kbd> deja <kbd>b·c</kbd> abajo) y los paréntesis crecen con lo que contienen.
+      Además <kbd>s^2</kbd> exponente, <kbd>H_2</kbd> o <kbd>H2</kbd> subíndice,
+      <kbd>\omega \zeta \tau</kbd> griegas y <kbd>\frac{a}{b}</kbd> forzado.
       El bloque se agranda solo para que entre.</td></tr>
     <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
@@ -554,9 +558,14 @@ function el(tag, attrs, parent) {
   return e;
 }
 /* ===================================================================
-   Ecuaciones: G1 · H_2 · K/(s+1) · (s+2)/(s^2+3s+2) · \frac{a}{b} · \omega_n
-   Se arma una cajita por trozo, se mide el ancho real del texto y se
-   apilan numerador y denominador alrededor del eje de la fracción.
+   Tipógrafo de ecuaciones para el interior de los bloques.
+   Analizador con precedencia real, así que las barras de fracción se
+   arman a cualquier profundidad de paréntesis:
+     G1                      G_1
+     K/(s+1)                 fracción apilada
+     (G_2/H_1)*(G_4/H_2)     dos fracciones multiplicadas
+     a*g_1/(b*h_1+1)/(h_2+1) una sola fracción: arriba a·g_1, abajo el producto
+     \frac{a}{b}  s^2  \omega_n
    =================================================================== */
 const SIMBOLOS = { alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",zeta:"ζ",eta:"η",
   theta:"θ",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",pi:"π",rho:"ρ",sigma:"σ",tau:"τ",
@@ -564,72 +573,134 @@ const SIMBOLOS = { alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",zeta:
   Pi:"Π",Sigma:"Σ",Phi:"Φ",Psi:"Ψ",Omega:"Ω",infty:"∞",pm:"±",mp:"∓",cdot:"·",times:"×",
   le:"≤",ge:"≥",ne:"≠",approx:"≈",sqrt:"√",int:"∫",partial:"∂",to:"→" };
 
-function cierre(s, i) {
-  let d = 0;
-  for (let j = i; j < s.length; j++) {
-    const c = s[j];
-    if (c === "(" || c === "[" || c === "{") d++;
-    else if (c === ")" || c === "]" || c === "}") { d--; if (d === 0) return j; }
-  }
-  return -1;
-}
-function nivelCero(s, chars) {
-  const idx = []; let d = 0;
-  for (let i = 0; i < s.length; i++) {
+/* ---------- 1. de texto a fichas ---------- */
+function fichas(src) {
+  const s = String(src == null ? "" : src), t = [];
+  let i = 0;
+  while (i < s.length) {
     const c = s[i];
-    if (c === "(" || c === "[" || c === "{") d++;
-    else if (c === ")" || c === "]" || c === "}") d--;
-    else if (d === 0 && chars.indexOf(c) >= 0) idx.push(i);
-  }
-  return idx;
-}
-function sinParentesis(s) {
-  s = s.trim();
-  while (s.length > 1 && s[0] === "(" && cierre(s, 0) === s.length - 1) s = s.slice(1, -1).trim();
-  return s;
-}
-function grupoDe(s, i) {                       // {…} · un carácter · \nombre
-  if (i >= s.length) return null;
-  if (s[i] === "{") { const j = cierre(s, i); if (j < 0) return null; return { txt: s.slice(i + 1, j), end: j + 1 }; }
-  const m = /^\\[A-Za-z]+/.exec(s.slice(i));
-  if (m) return { txt: m[0], end: i + m[0].length };
-  return { txt: s[i], end: i + 1 };
-}
-function parseExpr(src) {
-  const s = String(src == null ? "" : src);
-  const barras = nivelCero(s, "/");
-  const mas = nivelCero(s, "+");
-  const menos = nivelCero(s, "-").filter(i => i > 0 && !/[+\-*/^_(]/.test(s[i - 1]));
-  if (barras.length === 1 && !mas.length && !menos.length) {   // fracción apilada
-    const a = sinParentesis(s.slice(0, barras[0])), b = sinParentesis(s.slice(barras[0] + 1));
-    if (a && b) return [{ t: "frac", num: parseExpr(a), den: parseExpr(b) }];
-  }
-  return tokenizar(s);
-}
-function tokenizar(s) {
-  const out = []; let buf = "";
-  const soltar = () => { if (buf) { out.push({ t: "run", s: buf }); buf = ""; } };
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
+    if (/\s/.test(c)) { i++; continue; }
     if (c === "\\") {
       const m = /^\\([A-Za-z]+)/.exec(s.slice(i));
-      if (m && m[1] === "frac") {
-        const g1 = grupoDe(s, i + m[0].length), g2 = g1 ? grupoDe(s, g1.end) : null;
-        if (g1 && g2) { soltar(); out.push({ t: "frac", num: parseExpr(g1.txt), den: parseExpr(g2.txt) }); i = g2.end - 1; continue; }
-      }
-      if (m && SIMBOLOS[m[1]]) { buf += SIMBOLOS[m[1]]; i += m[0].length - 1; continue; }
-      continue;
+      if (m) { t.push({ k: "cmd", v: m[1] }); i += m[0].length; continue; }
+      i++; continue;
     }
-    if (c === "^" || c === "_") {
-      const g = grupoDe(s, i + 1);
-      if (g) { soltar(); out.push({ t: c === "^" ? "sup" : "sub", items: parseExpr(g.txt) }); i = g.end - 1; continue; }
-    }
-    buf += c;
+    if (/[0-9]/.test(c)) { const m = /^[0-9]+(\.[0-9]+)?/.exec(s.slice(i)); t.push({ k: "num", v: m[0] }); i += m[0].length; continue; }
+    if (/[A-Za-zΑ-Ωα-ω]/.test(c)) { const m = /^[A-Za-zΑ-Ωα-ω]+/.exec(s.slice(i)); t.push({ k: "id", v: m[0] }); i += m[0].length; continue; }
+    t.push({ k: "op", v: c }); i++;
   }
-  soltar();
-  return out;
+  return t;
 }
-/* medición real del texto usando una capa oculta del propio SVG */
+
+/* ---------- 2. de fichas a árbol ---------- */
+const MULT = ["*", "·", "×"];
+function analizar(src) {
+  const tk = fichas(src);
+  let p = 0;
+  const ficha = () => tk[p];
+  const esOp = (...vs) => tk[p] && tk[p].k === "op" && vs.indexOf(tk[p].v) >= 0;
+
+  function expr() {                                   // sumas, restas y comparaciones
+    let items = termino();
+    while (esOp("+", "-", "=", "<", ">", "≤", "≥", "≠", ",")) {
+      const op = tk[p++].v;
+      const der = termino();
+      items = items.concat([{ t: "op", s: op === "-" ? "−" : op, esp: op === "," ? 0 : .24 }], der);
+    }
+    return items;
+  }
+  function termino() {                                // productos y divisiones
+    const f0 = factor();
+    if (!f0) return [];
+    const facs = [{ op: "ini", items: f0 }];
+    for (;;) {
+      if (esOp.apply(null, MULT.concat(["/"]))) {
+        const op = tk[p++].v;
+        const g = factor();
+        if (!g) break;
+        facs.push({ op: op === "/" ? "/" : "·", items: g });
+      } else if (empiezaAtomo()) {                    // multiplicación implícita: s(s+1), 2s
+        const g = factor();
+        if (!g) break;
+        facs.push({ op: "imp", items: g });
+      } else break;
+    }
+    if (!facs.some(f => f.op === "/")) return producto(facs);
+    // a/b/c es lo mismo que a/(b·c): una sola fracción, mucho más legible
+    const arriba = facs.filter(f => f.op !== "/"), abajo = facs.filter(f => f.op === "/");
+    return [{ t: "frac", num: producto(arriba, true), den: producto(abajo, true) }];
+  }
+  function producto(facs, solos) {
+    let out = [];
+    facs.forEach((f, i) => {
+      if (i > 0 && f.op !== "imp") out.push({ t: "op", s: "·", esp: .14 });
+      out = out.concat(desnudar(f.items, solos && facs.length === 1));
+    });
+    return out;
+  }
+  function factor() {
+    if (esOp("-", "+")) {                             // signo delante
+      const sg = tk[p++].v;
+      const r = factor();
+      return [{ t: "op", s: sg === "-" ? "−" : "+", esp: 0 }].concat(r || []);
+    }
+    let base = atomo();
+    if (!base) return null;
+    while (esOp("^", "_")) {
+      const op = tk[p++].v;
+      base = base.concat([{ t: op === "^" ? "sup" : "sub", items: llave() }]);
+    }
+    return base;
+  }
+  function llave() { if (esOp("{")) { p++; const e = expr(); if (esOp("}")) p++; return e; } return atomo() || []; }
+  function atomo() {
+    const t = ficha();
+    if (!t) return null;
+    if (t.k === "op" && (t.v === "(" || t.v === "[")) {
+      const cierra = t.v === "(" ? ")" : "]";
+      p++;
+      const dentro = expr();
+      if (esOp(cierra)) p++;                          // si falta el cierre, no pasa nada
+      return [{ t: "grupo", items: dentro, izq: t.v, der: cierra }];
+    }
+    if (t.k === "num") { p++; return [{ t: "run", s: t.v }]; }
+    if (t.k === "id") {
+      p++;
+      const items = [{ t: "run", s: t.v }];
+      // G1 → G con subíndice 1 (la s de Laplace queda como está: para s² se escribe s^2)
+      if (tk[p] && tk[p].k === "num" && t.v.length <= 2 && t.v.toLowerCase() !== "s" && tk[p].v.indexOf(".") < 0) {
+        items.push({ t: "sub", items: [{ t: "run", s: tk[p].v }] }); p++;
+      }
+      return items;
+    }
+    if (t.k === "cmd") {
+      p++;
+      if (t.v === "frac") { const a = llave(), b = llave(); return [{ t: "frac", num: desnudar(a, true), den: desnudar(b, true) }]; }
+      return [{ t: "run", s: SIMBOLOS[t.v] || t.v }];
+    }
+    if (t.k === "op" && "+-*/^_(){}[]".indexOf(t.v) < 0) { p++; return [{ t: "run", s: t.v }]; }
+    p++; return null;                                 // ficha suelta que no encaja: la salteo
+  }
+  function empiezaAtomo() {
+    const t = ficha();
+    if (!t) return false;
+    return t.k === "id" || t.k === "num" || t.k === "cmd" || t.v === "(" || t.v === "[";
+  }
+  const r = expr();
+  return r.length ? r : [];
+}
+/* paréntesis que sobran: los que envuelven todo un numerador, o los de una
+   fracción suelta dentro de un producto */
+function desnudar(items, siempre) {
+  if (items.length === 1 && items[0].t === "grupo") {
+    const dentro = items[0].items;
+    if (siempre) return dentro;
+    if (dentro.length === 1 && dentro[0].t === "frac") return dentro;
+  }
+  return items;
+}
+
+/* ---------- 3. medición del texto en el propio SVG ---------- */
 let _mt = null; const _mcache = new Map();
 function anchoTexto(str, fs) {
   const k = fs + "|" + str;
@@ -646,55 +717,79 @@ function anchoTexto(str, fs) {
   _mcache.set(k, w);
   return w;
 }
+
+/* ---------- 4. del árbol a cajas con alto y ancho ---------- */
 function cajaFila(items, fs) {
-  const cajas = items.map(it => cajaDe(it, fs));
+  const cajas = (items || []).map(it => cajaDe(it, fs));
   const w = cajas.reduce((a, c) => a + c.w, 0);
-  const up = Math.max(fs * .55, ...cajas.map(c => c.up));
-  const down = Math.max(fs * .45, ...cajas.map(c => c.down));
+  const up = Math.max.apply(null, [fs * .55].concat(cajas.map(c => c.up)));
+  const down = Math.max.apply(null, [fs * .45].concat(cajas.map(c => c.down)));
   return { w, up, down, draw(g, x, y) { let cx = x; for (const c of cajas) { c.draw(g, cx, y); cx += c.w; } } };
 }
 function cajaDe(it, fs) {
-  if (it.t === "run") {
+  if (it.t === "run" || it.t === "op") {
+    const esp = it.t === "op" ? (it.esp === undefined ? .18 : it.esp) * fs : 0;
     const w = anchoTexto(it.s, fs);
-    return { w, up: fs * .55, down: fs * .45, draw(g, x, y) {
-      const t = el("text", { class: "n-math", x, y, "font-size": fs }, g);
+    return { w: w + esp * 2, up: fs * .55, down: fs * .45, draw(g, x, y) {
+      const t = el("text", { class: "n-math", x: x + esp, y, "font-size": fs }, g);
       t.setAttributeNS("http://www.w3.org/XML/1998/namespace", "xml:space", "preserve");
       t.textContent = it.s;
     } };
   }
   if (it.t === "sup" || it.t === "sub") {
-    const f2 = fs * .72, inner = cajaFila(it.items, f2);
+    const f2 = fs * .72, dentro = cajaFila(it.items, f2);
     const dy = it.t === "sup" ? -fs * .34 : fs * .28;
-    return { w: inner.w + fs * .04,
-      up: it.t === "sup" ? -dy + inner.up : fs * .55,
-      down: it.t === "sub" ? dy + inner.down : fs * .45,
-      draw(g, x, y) { inner.draw(g, x, y + dy); } };
+    return { w: dentro.w + fs * .04,
+      up: it.t === "sup" ? -dy + dentro.up : fs * .55,
+      down: it.t === "sub" ? dy + dentro.down : fs * .45,
+      draw(g, x, y) { dentro.draw(g, x, y + dy); } };
   }
   if (it.t === "frac") {
     const num = cajaFila(it.num, fs), den = cajaFila(it.den, fs);
     const pad = Math.max(4, fs * .28), hueco = fs * .30;
     const w = Math.max(num.w, den.w) + pad * 2;
-    return { w,
-      up: hueco + num.down + num.up,
-      down: hueco + den.up + den.down,
+    return { w, up: hueco + num.down + num.up, down: hueco + den.up + den.down,
       draw(g, x, y) {
         el("line", { class: "n-bar", x1: x + 1.5, y1: y, x2: x + w - 1.5, y2: y }, g);
         num.draw(g, x + (w - num.w) / 2, y - hueco - num.down);
         den.draw(g, x + (w - den.w) / 2, y + hueco + den.up);
       } };
   }
+  if (it.t === "grupo") {
+    const dentro = cajaFila(it.items, fs);
+    const alto = dentro.up + dentro.down;
+    const estirar = alto > fs * 1.5;                  // si adentro hay una fracción, crecen
+    const pw = estirar ? Math.max(fs * .24, alto * .075) : anchoTexto(it.izq, fs);
+    const up = estirar ? dentro.up + 1.5 : Math.max(dentro.up, fs * .58);
+    const down = estirar ? dentro.down + 1.5 : Math.max(dentro.down, fs * .48);
+    return { w: dentro.w + pw * 2 + fs * .08, up, down,
+      draw(g, x, y) {
+        const xd = x + pw + fs * .04;
+        dentro.draw(g, xd, y);
+        if (!estirar) {
+          for (const [s, px] of [[it.izq, x], [it.der, xd + dentro.w + fs * .04]]) {
+            const t = el("text", { class: "n-math", x: px, y, "font-size": fs }, g);
+            t.textContent = s;
+          }
+        } else {
+          const t = y - up, b = y + down, xr = xd + dentro.w + fs * .04;
+          if (it.izq === "(") {
+            el("path", { class: "n-paren", d: `M ${x + pw} ${t} Q ${x - pw} ${y} ${x + pw} ${b}` }, g);
+            el("path", { class: "n-paren", d: `M ${xr} ${t} Q ${xr + 2 * pw} ${y} ${xr} ${b}` }, g);
+          } else {
+            el("path", { class: "n-paren", d: `M ${x + pw} ${t} H ${x} V ${b} H ${x + pw}` }, g);
+            el("path", { class: "n-paren", d: `M ${xr} ${t} H ${xr + pw} V ${b} H ${xr}` }, g);
+          }
+        }
+      } };
+  }
   return { w: 0, up: fs * .55, down: fs * .45, draw() {} };
-}
-function normalizar(label) {                    // G1 -> G_1, como antes
-  const s = String(label == null ? "" : label);
-  const m = /^([A-Za-zΑ-Ωα-ω]+)(\d+)$/.exec(s);
-  return m ? m[1] + "_" + m[2] : s;
 }
 const _bcache = new Map();
 function cajaEtiqueta(label, fs) {
   const k = fs + "|" + label;
   if (_bcache.has(k)) return _bcache.get(k);
-  const b = cajaFila(parseExpr(normalizar(label)), fs);
+  const b = cajaFila(analizar(label), fs);
   _bcache.set(k, b);
   return b;
 }
@@ -910,9 +1005,10 @@ function renderInspector() {
     } else {
       h += `<div class="row"><label>Nombre</label><div class="fill"><input type="text" id="n-label" value="${escapeHtml(n.label || "")}" placeholder="opcional"></div></div>`;
     }
-    h += `<div class="hint">Ecuaciones: <b>K/(s+1)</b> arma la fracción apilada, <b>s^2</b> el exponente,
-      <b>H_2</b> el subíndice (o <b>H2</b> directo) y <b>\\omega \\zeta \\tau</b> las griegas.
-      Para forzar la fracción: <b>\\frac{a}{b}</b>.</div></div>`;
+    h += `<div class="hint">Ecuaciones: las barras se apilan a cualquier profundidad —
+      <b>(G_2/H_1)*(G_4/H_2)</b> da dos fracciones multiplicadas y <b>a/b/c</b> una sola con
+      <b>b·c</b> abajo. Además <b>s^2</b> exponente, <b>H_2</b> o <b>H2</b> subíndice,
+      <b>\\omega \\zeta \\tau</b> griegas y <b>\\frac{a}{b}</b> para forzar la fracción.</div></div>`;
 
     if (n.type === "sum") {
       h += `<div class="sec"><h3>Signos del sumador</h3>
@@ -973,14 +1069,14 @@ function wireInspector(nsel, esel) {
   live("n-x", v => nsel.forEach(n => n.x = +v));
   live("n-y", v => nsel.forEach(n => n.y = +v));
   const autoSel = document.getElementById("n-auto");
-  if (autoSel) autoSel.onchange = () => lock(() => {
+  if (autoSel) autoSel.onchange = () => {
     nsel.forEach(n => n.auto = autoSel.value === "1");
     commit(); render();
-  });
+  };
   const cross = document.getElementById("s-cross");
-  if (cross) { cross.value = nsel[0].cross ? "1" : "0"; cross.onchange = () => lock(() => { nsel.forEach(n => n.cross = cross.value === "1"); commit(); render(); }); }
+  if (cross) { cross.value = nsel[0].cross ? "1" : "0"; cross.onchange = () => { nsel.forEach(n => n.cross = cross.value === "1"); commit(); render(); }; }
   document.querySelectorAll(".sgn").forEach(sel => {
-    sel.onchange = () => lock(() => { nsel.forEach(n => { if (n.signs) n.signs[sel.dataset.side] = sel.value; }); commit(); render(); });
+    sel.onchange = () => { nsel.forEach(n => { if (n.signs) n.signs[sel.dataset.side] = sel.value; }); commit(); render(); };
   });
   const bind = (id, fn) => { const e = document.getElementById(id); if (e) e.onclick = () => { fn(); commit(); render(); }; };
   bind("n-dup", duplicateSel);
@@ -990,16 +1086,16 @@ function wireInspector(nsel, esel) {
   live("e-label", v => esel.forEach(e => e.label = v));
   live("e-width", v => esel.forEach(e => e.width = +v || 1.6));
   const st = document.getElementById("e-style");
-  if (st) { st.value = esel[0].dashed ? "dashed" : "solid"; st.onchange = () => lock(() => { esel.forEach(e => e.dashed = st.value === "dashed"); commit(); render(); }); }
+  if (st) { st.value = esel[0].dashed ? "dashed" : "solid"; st.onchange = () => { esel.forEach(e => e.dashed = st.value === "dashed"); commit(); render(); }; }
   const ar = document.getElementById("e-arrow");
-  if (ar) { ar.value = esel[0].arrow === false ? "0" : "1"; ar.onchange = () => lock(() => { esel.forEach(e => e.arrow = ar.value === "1"); commit(); render(); }); }
+  if (ar) { ar.value = esel[0].arrow === false ? "0" : "1"; ar.onchange = () => { esel.forEach(e => e.arrow = ar.value === "1"); commit(); render(); }; }
   bind("e-split", () => esel.forEach(splitEdge));
   bind("e-alt", () => esel.forEach(e => e.variant = (e.variant || 0) + 1));
   bind("e-reset", () => esel.forEach(e => e.variant = 0));
   bind("e-flip", () => esel.forEach(e => { const f = e.from; e.from = e.to; e.to = f; e.variant = 0; }));
   const fp = document.getElementById("e-fp"), tp = document.getElementById("e-tp");
-  if (fp) fp.onchange = () => lock(() => { esel.forEach(e => { e.from.port = fp.value; e.variant = 0; }); commit(); render(); });
-  if (tp) tp.onchange = () => lock(() => { esel.forEach(e => { e.to.port = tp.value; e.variant = 0; }); commit(); render(); });
+  if (fp) fp.onchange = () => { esel.forEach(e => { e.from.port = fp.value; e.variant = 0; }); commit(); render(); };
+  if (tp) tp.onchange = () => { esel.forEach(e => { e.to.port = tp.value; e.variant = 0; }); commit(); render(); };
 }
 
 /* ======================= historial ======================= */
@@ -1292,8 +1388,7 @@ function buildExportSVG() {
   const b = bboxAll(), m = 30;
   const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
   const s = document.createElementNS(NS, "svg");
-  s.setAttribute("xmlns", NS);
-  s.setAttribute("width", W); s.setAttribute("height", H);
+  s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
   const defs = document.createElementNS(NS, "defs");
   defs.innerHTML = `<marker id="arrow" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
@@ -1304,6 +1399,8 @@ function buildExportSVG() {
     .n-label,.n-sign,.e-label{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central}
     .n-math{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:start;dominant-baseline:central}
     .n-bar{stroke:#101418;stroke-width:1.4;fill:none}
+    .n-paren{stroke:#101418;stroke-width:1.25;fill:none;stroke-linecap:round}
+.n-paren{stroke:#101418;stroke-width:1.25;fill:none;stroke-linecap:round}
     .n-cross{stroke:#101418;stroke-width:1.4;fill:none}
     .edge{stroke:#101418;stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
     .edge.dashed{stroke-dasharray:6 4}.e-label-bg{fill:#fff}`;
