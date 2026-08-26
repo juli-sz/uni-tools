@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de diagramas de bloques</title>
+<style>
+:root{
+  --ink:#12181f;
+  --ink-2:#3d4b5a;
+  --line:#d7dee6;
+  --line-2:#eef2f6;
+  --paper:#ffffff;
+  --shell:#f2f5f8;
+  --accent:#0d5bd6;
+  --accent-soft:#e3edff;
+  --warn:#c2410c;
+  --ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+  --draw:Arial,Helvetica,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:var(--ui);color:var(--ink);background:var(--shell);
+  display:flex;flex-direction:column;overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* ---------- top bar ---------- */
+header{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:8px 14px;background:var(--paper);border-bottom:1px solid var(--line);
+  box-shadow:0 1px 0 rgba(18,24,31,.03);z-index:5;
+}
+.brand{display:flex;align-items:baseline;gap:8px;margin-right:4px}
+.brand b{font-size:14px;letter-spacing:-.01em}
+.brand span{font-family:var(--mono);font-size:10px;color:#8a97a5;letter-spacing:.08em;text-transform:uppercase}
+.group{display:flex;align-items:center;gap:4px;padding-right:12px;border-right:1px solid var(--line-2)}
+.group:last-child{border-right:0}
+.glab{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;text-transform:uppercase;margin-right:2px}
+button,select,input[type=text],input[type=number]{font-family:var(--ui);font-size:12px;color:var(--ink)}
+.btn{
+  border:1px solid var(--line);background:var(--paper);border-radius:6px;
+  padding:5px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+  line-height:1;transition:background .12s,border-color .12s,color .12s;white-space:nowrap;
+}
+.btn:hover{background:var(--line-2)}
+.btn:active{transform:translateY(1px)}
+.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.on svg{stroke:#fff}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--line-2)}
+.btn svg{width:14px;height:14px;stroke:var(--ink-2);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.chip{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:0 6px}
+/* ---------- layout ---------- */
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;background:var(--paper);overflow:hidden}
+svg#canvas{width:100%;height:100%;display:block;cursor:default;touch-action:none}
+svg#canvas.mode-connect{cursor:crosshair}
+svg#canvas.panning{cursor:grabbing}
+/* ---------- palette (floating) ---------- */
+#palette{
+  position:absolute;top:12px;left:12px;background:var(--paper);
+  border:1px solid var(--line);border-radius:10px;padding:6px;
+  display:flex;flex-direction:column;gap:4px;
+  box-shadow:0 6px 24px rgba(18,24,31,.08);
+}
+#palette .ptitle{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;padding:2px 4px 4px}
+.ptool{
+  width:150px;display:flex;align-items:center;gap:8px;border:1px solid transparent;
+  background:transparent;border-radius:7px;padding:6px 8px;cursor:pointer;text-align:left;
+}
+.ptool:hover{background:var(--line-2)}
+.ptool.on{background:var(--accent-soft);border-color:#b9d2ff}
+.ptool svg{width:26px;height:20px;stroke:var(--ink);stroke-width:1.3;fill:none;overflow:visible}
+.ptool span{font-size:12px}
+.ptool kbd{margin-left:auto;font-family:var(--mono);font-size:10px;color:#93a0ae}
+/* ---------- inspector ---------- */
+#inspector{
+  width:264px;flex:none;background:var(--paper);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;overflow-y:auto;
+}
+.sec{padding:12px 14px;border-bottom:1px solid var(--line-2)}
+.sec h3{
+  margin:0 0 10px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:#93a0ae;font-weight:600;
+}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.row:last-child{margin-bottom:0}
+.row label{font-size:11.5px;color:var(--ink-2);width:74px;flex:none}
+.row .fill{flex:1;min-width:0}
+input[type=text],input[type=number],select{
+  width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:var(--paper);
+}
+input[type=text]:focus,input[type=number]:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.signbox{border:1px solid var(--line);border-radius:8px;padding:8px;display:grid;
+  grid-template-columns:repeat(3,1fr);gap:4px;align-items:center;justify-items:center}
+.signbox .sgn{width:100%}
+.signbox .mid{width:34px;height:34px;border:1.5px solid var(--ink);border-radius:50%;position:relative}
+.signbox .mid::before,.signbox .mid::after{content:"";position:absolute;inset:0;border-top:1.5px solid var(--ink);top:50%}
+.signbox .mid::before{transform:rotate(45deg)}
+.signbox .mid::after{transform:rotate(-45deg)}
+.hint{font-size:11px;color:#8a97a5;line-height:1.5}
+.empty{padding:26px 16px;text-align:center;color:#93a0ae;font-size:12px;line-height:1.6}
+.iconbar{display:flex;flex-wrap:wrap;gap:4px}
+.iconbar .btn{padding:5px 7px}
+kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line);
+  border-bottom-width:2px;border-radius:4px;padding:1px 4px;font-size:10px}
+/* ---------- status ---------- */
+#status{
+  display:flex;align-items:center;gap:16px;padding:5px 14px;background:var(--paper);
+  border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:#8a97a5;
+}
+#status .k{color:var(--ink-2)}
+#toast{
+  position:absolute;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;font-size:12px;padding:8px 14px;border-radius:8px;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ---------- modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(18,24,31,.45);display:none;align-items:center;
+  justify-content:center;z-index:40;padding:20px}
+.overlay.show{display:flex}
+.modal{background:var(--paper);border-radius:12px;max-width:560px;width:100%;max-height:80vh;
+  overflow:auto;padding:22px 24px;box-shadow:0 20px 60px rgba(18,24,31,.3)}
+.modal h2{margin:0 0 4px;font-size:16px}
+.modal p.sub{margin:0 0 16px;color:#8a97a5;font-size:12px}
+.modal table{width:100%;border-collapse:collapse;font-size:12px}
+.modal td{padding:5px 0;border-bottom:1px solid var(--line-2);vertical-align:top}
+.modal td:first-child{width:130px;white-space:nowrap}
+textarea{width:100%;height:200px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
+  border-radius:8px;padding:8px;resize:vertical}
+/* ---------- svg drawing ---------- */
+.n-shape{fill:var(--paper);stroke:#101418;stroke-width:1.6}
+.n-label{font-family:var(--draw);fill:#101418;text-anchor:middle;dominant-baseline:central;
+  pointer-events:none;user-select:none}
+.n-math{font-family:var(--draw);fill:#101418;text-anchor:start;dominant-baseline:central;
+  pointer-events:none;user-select:none;white-space:pre}
+.n-bar{stroke:#101418;stroke-width:1.4;fill:none}
+.n-sign{font-family:var(--draw);fill:#101418;text-anchor:middle;dominant-baseline:central;
+  pointer-events:none;user-select:none;font-size:13px}
+.n-cross{stroke:#101418;stroke-width:1.4;fill:none}
+.edge{stroke:#101418;stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.edge.dashed{stroke-dasharray:6 4}
+.edge-hit{stroke:transparent;stroke-width:14;fill:none;cursor:pointer}
+.sel .n-shape{stroke:var(--accent)}
+.sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.sel-dot{fill:var(--accent)}
+.edge.sel{stroke:var(--accent)}
+.port{fill:var(--paper);stroke:var(--accent);stroke-width:1.4;cursor:crosshair}
+.port:hover{fill:var(--accent)}
+.port.big{r:7}
+.port-stem{stroke:var(--accent);stroke-width:1;stroke-dasharray:2 2;pointer-events:none;opacity:.6}
+#canvas.split-mode{cursor:crosshair}
+#canvas.split-mode .edge{stroke:var(--accent)}
+#canvas.split-mode g:hover>.edge{stroke-width:3.4}
+.band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+.ghostline{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 4;fill:none;pointer-events:none}
+.e-label{font-family:var(--draw);font-size:11px;fill:#101418;text-anchor:middle;
+  dominant-baseline:central;pointer-events:none}
+.e-label-bg{fill:var(--paper)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>Diagramas de bloques</b><span>lazo cerrado</span></div>
+
+  <div class="group">
+    <span class="glab">Modo</span>
+    <button class="btn on" id="m-select" title="Seleccionar / mover (V)">
+      <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg>Selección</button>
+    <button class="btn" id="m-connect" title="Conectar (C)">
+      <svg viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M13 8l4 4-4 4"/><circle cx="20" cy="12" r="1.5"/></svg>Conectar</button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Edición</span>
+    <button class="btn ghost" id="b-undo" title="Deshacer (Ctrl+Z)">
+      <svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 010 10h-3"/></svg></button>
+    <button class="btn ghost" id="b-redo" title="Rehacer (Ctrl+Y)">
+      <svg viewBox="0 0 24 24"><path d="M15 14l4-4-4-4"/><path d="M19 10h-9a5 5 0 000 10h3"/></svg></button>
+    <button class="btn ghost" id="b-dup" title="Duplicar (Ctrl+D)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg></button>
+    <button class="btn ghost" id="b-del" title="Borrar (Supr)">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg></button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Alinear</span>
+    <button class="btn ghost" data-align="left" title="Alinear a la izquierda">
+      <svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4"/><rect x="7" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="cx" title="Centrar vertical (mismo eje X)">
+      <svg viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="5" y="6" width="14" height="4"/><rect x="8" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="right" title="Alinear a la derecha">
+      <svg viewBox="0 0 24 24"><path d="M20 3v18"/><rect x="5" y="6" width="12" height="4"/><rect x="9" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="top" title="Alinear arriba">
+      <svg viewBox="0 0 24 24"><path d="M3 4h18"/><rect x="6" y="7" width="4" height="12"/><rect x="14" y="7" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="cy" title="Centrar horizontal (misma línea)">
+      <svg viewBox="0 0 24 24"><path d="M3 12h18"/><rect x="6" y="5" width="4" height="14"/><rect x="14" y="8" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="bottom" title="Alinear abajo">
+      <svg viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="6" y="5" width="4" height="12"/><rect x="14" y="9" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="dh" title="Distribuir horizontal">
+      <svg viewBox="0 0 24 24"><path d="M3 4v16M21 4v16"/><rect x="10" y="8" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="dv" title="Distribuir vertical">
+      <svg viewBox="0 0 24 24"><path d="M4 3h16M4 21h16"/><rect x="8" y="10" width="8" height="4"/></svg></button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Grilla</span>
+    <button class="btn on" id="b-snap" title="Imantar a la grilla">
+      <svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>Imán</button>
+    <select id="gridsize" style="width:70px" title="Paso de grilla">
+      <option value="10">10 px</option><option value="20" selected>20 px</option>
+      <option value="25">25 px</option><option value="40">40 px</option>
+    </select>
+    <button class="btn ghost" id="b-gridshow" title="Ver grilla">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M4 12h16M12 4v16"/></svg></button>
+    <button class="btn ghost" id="b-snapall" title="Imantar todo a la grilla">Ajustar todo</button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Vista</span>
+    <button class="btn ghost" id="b-zoomout"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-4-4"/></svg></button>
+    <span class="chip" id="zoomlab">100%</span>
+    <button class="btn ghost" id="b-zoomin"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M20 20l-4-4"/></svg></button>
+    <button class="btn ghost" id="b-fit" title="Encuadrar (F)">Encuadrar</button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Archivo</span>
+    <button class="btn ghost" id="b-example" title="Cargar diagrama de ejemplo">Ejemplo</button>
+    <button class="btn ghost" id="b-clear" title="Vaciar la hoja">Vaciar</button>
+    <button class="btn ghost" id="b-svg">SVG</button>
+    <button class="btn ghost" id="b-png">PNG</button>
+    <button class="btn ghost" id="b-save">Guardar</button>
+    <button class="btn ghost" id="b-open">Abrir</button>
+    <button class="btn ghost" id="b-help" title="Atajos (?)">?</button>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="canvas">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
+                orient="auto-start-reverse" markerUnits="strokeWidth">
+          <path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="#101418"/>
+        </marker>
+        <marker id="arrowSel" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
+                orient="auto-start-reverse" markerUnits="strokeWidth">
+          <path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="#0d5bd6"/>
+        </marker>
+        <pattern id="gridPat" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M20 0H0V20" fill="none" stroke="#e8edf3" stroke-width="1"/>
+        </pattern>
+        <pattern id="gridPat10" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#gridPat)"/>
+          <path d="M100 0H0V100" fill="none" stroke="#dbe3ec" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <g id="gMeasure" style="visibility:hidden;pointer-events:none"></g>
+      <g id="viewport">
+        <rect id="gridbg" x="-6000" y="-6000" width="14000" height="14000" fill="url(#gridPat10)"/>
+        <g id="gEdges"></g>
+        <g id="gNodes"></g>
+        <g id="gOverlay"></g>
+      </g>
+    </svg>
+
+    <div id="palette">
+      <div class="ptitle">INSERTAR</div>
+      <button class="ptool" data-add="block"><svg viewBox="0 0 30 22"><rect x="4" y="4" width="22" height="14"/><path d="M0 11h4M26 11h4"/></svg><span>Bloque G(s)</span><kbd>B</kbd></button>
+      <button class="ptool" data-add="sum"><svg viewBox="0 0 30 22"><circle cx="15" cy="11" r="8"/><path d="M9.3 5.3l11.4 11.4M20.7 5.3L9.3 16.7"/></svg><span>Sumador</span><kbd>S</kbd></button>
+      <button class="ptool" data-add="node"><svg viewBox="0 0 30 22"><path d="M2 11h26M15 11v9"/><circle cx="15" cy="11" r="2.6" fill="currentColor"/></svg><span>Bifurcación en flecha</span><kbd>N</kbd></button>
+      <button class="ptool" data-add="io"><svg viewBox="0 0 30 22"><text x="2" y="15" font-size="10" fill="currentColor" stroke="none">R(s)</text><path d="M18 11h10M25 8l3 3-3 3"/></svg><span>Entrada / salida</span><kbd>E</kbd></button>
+      <button class="ptool" data-add="text"><svg viewBox="0 0 30 22"><path d="M6 6h18M15 6v12"/></svg><span>Texto libre</span><kbd>T</kbd></button>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+
+  <aside id="inspector"><div id="insp"></div></aside>
+</main>
+
+<div id="status">
+  <span><span class="k">Elementos</span> <span id="st-n">0</span></span>
+  <span><span class="k">Flechas</span> <span id="st-e">0</span></span>
+  <span><span class="k">Selección</span> <span id="st-s">—</span></span>
+  <span id="st-hint" style="margin-left:auto"></span>
+</div>
+
+<div class="overlay" id="ov-help"><div class="modal">
+  <h2>Atajos y cómo se usa</h2>
+  <p class="sub">Todo el diagrama vive en tu navegador. Guardá con “Guardar” para no perderlo.</p>
+  <table>
+    <tr><td><kbd>V</kbd> / <kbd>C</kbd></td><td>Modo selección / modo conectar</td></tr>
+    <tr><td><kbd>B</kbd><kbd>S</kbd><kbd>N</kbd><kbd>E</kbd><kbd>T</kbd></td><td>Insertar bloque, sumador, bifurcación, entrada-salida, texto</td></tr>
+    <tr><td>Bifurcación</td><td>Elegí la herramienta y hacé clic en una flecha: se inserta en el medio y parte la línea en dos</td></tr>
+    <tr><td>Arrastrar desde un punto azul</td><td>Crea una flecha hacia otro elemento (o soltala en el vacío para cancelar)</td></tr>
+    <tr><td>Doble clic</td><td>Renombrar el elemento</td></tr>
+    <tr><td>Ecuaciones</td><td><kbd>K/(s+1)</kbd> apila la fracción · <kbd>s^2</kbd> exponente ·
+      <kbd>H_2</kbd> subíndice · <kbd>\omega \zeta \tau</kbd> griegas · <kbd>\frac{a}{b}</kbd> forzado.
+      El bloque se agranda solo para que entre.</td></tr>
+    <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>Seleccionar todo</td></tr>
+    <tr><td>Flechas</td><td>Mover 1 paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
+    <tr><td>Rueda</td><td>Zoom · <kbd>Shift</kbd>+rueda desplaza horizontal</td></tr>
+    <tr><td>Espacio / botón central</td><td>Mover la hoja</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Encuadrar todo</td></tr>
+    <tr><td>Flecha seleccionada</td><td>“Ruta alternativa” prueba el siguiente camino sin superposiciones</td></tr>
+  </table>
+  <div style="margin-top:16px;text-align:right"><button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button></div>
+</div></div>
+
+<div class="overlay" id="ov-io"><div class="modal">
+  <h2 id="io-title">Abrir diagrama</h2>
+  <p class="sub" id="io-sub">Pegá acá el JSON de un diagrama guardado.</p>
+  <textarea id="io-text" spellcheck="false"></textarea>
+  <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" id="io-cancel">Cancelar</button>
+    <button class="btn on" id="io-ok">Cargar</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+const $ = (s) => document.querySelector(s);
+const svg = $("#canvas"), viewport = $("#viewport");
+const gEdges = $("#gEdges"), gNodes = $("#gNodes"), gOv = $("#gOverlay");
+
+/* ======================= modelo ======================= */
+let S = {
+  nodes: [],
+  edges: [],
+  sel: [],           // ids
+  selEdges: [],      // ids
+  mode: "select",
+  snap: true,
+  grid: 20,
+  showGrid: true,
+  zoom: 1,
+  pan: { x: 60, y: 40 }
+};
+let uidc = 1;
+const uid = (p) => p + (uidc++);
+
+const DEF = {
+  block: { w: 72, h: 42, label: "G", font: 15 },
+  sum:   { w: 50, h: 50, label: "", font: 13, signs: { l: "+", t: "", r: "", b: "−" }, cross: true },
+  node:  { w: 10, h: 10, label: "" },
+  io:    { w: 46, h: 22, label: "R(s)", font: 14 },
+  text:  { w: 60, h: 20, label: "Texto", font: 13 }
+};
+const MINUS = "−";
+
+function makeNode(type, x, y, extra) {
+  const d = DEF[type];
+  const n = Object.assign({ id: uid("n"), type, x, y, w: d.w, h: d.h,
+    label: d.label, font: d.font || 14 }, JSON.parse(JSON.stringify(extra || {})));
+  if (type === "sum") { n.signs = Object.assign({}, DEF.sum.signs, n.signs); n.cross = n.cross !== false; }
+  return n;
+}
+const getNode = (id) => S.nodes.find(n => n.id === id);
+const getEdge = (id) => S.edges.find(e => e.id === id);
+
+/* ======================= geometría ======================= */
+const DIRS = { l: { x: -1, y: 0 }, r: { x: 1, y: 0 }, t: { x: 0, y: -1 }, b: { x: 0, y: 1 } };
+function rectOf(n) {
+  const w = n.type === "node" ? 12 : n.w, h = n.type === "node" ? 12 : n.h;
+  return { l: n.x - w / 2, r: n.x + w / 2, t: n.y - h / 2, b: n.y + h / 2, w, h, cx: n.x, cy: n.y };
+}
+function portPoint(n, port) {
+  if (n.type === "node") return { x: n.x, y: n.y };
+  const R = rectOf(n);
+  if (port === "l") return { x: R.l, y: n.y };
+  if (port === "r") return { x: R.r, y: n.y };
+  if (port === "t") return { x: n.x, y: R.t };
+  return { x: n.x, y: R.b };
+}
+const dirOf = (p) => DIRS[p];
+const snapV = (v) => S.snap ? Math.round(v / S.grid) * S.grid : Math.round(v);
+
+/* ======================= ruteo ortogonal ======================= */
+function cleanPts(pts) {
+  const out = [];
+  for (const p of pts) {
+    const q = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+    if (out.length && Math.abs(out[out.length - 1].x - q.x) < .3 && Math.abs(out[out.length - 1].y - q.y) < .3) continue;
+    out.push(q);
+  }
+  const res = [];
+  for (let i = 0; i < out.length; i++) {
+    if (i > 0 && i < out.length - 1) {
+      const a = out[i - 1], b = out[i], c = out[i + 1];
+      const col = (Math.abs(a.x - b.x) < .3 && Math.abs(b.x - c.x) < .3) ||
+                  (Math.abs(a.y - b.y) < .3 && Math.abs(b.y - c.y) < .3);
+      if (col) continue;
+    }
+    res.push(out[i]);
+  }
+  return res;
+}
+function segsOf(pts) {
+  const s = [];
+  for (let i = 0; i < pts.length - 1; i++) s.push([pts[i], pts[i + 1]]);
+  return s;
+}
+function segRect(seg, R) {
+  const x1 = Math.min(seg[0].x, seg[1].x), x2 = Math.max(seg[0].x, seg[1].x);
+  const y1 = Math.min(seg[0].y, seg[1].y), y2 = Math.max(seg[0].y, seg[1].y);
+  return !(x2 < R.l || x1 > R.r || y2 < R.t || y1 > R.b);
+}
+function overlapInfo(seg, other) {
+  const horiz = Math.abs(seg[0].y - seg[1].y) < .5, horiz2 = Math.abs(other[0].y - other[1].y) < .5;
+  const vert = Math.abs(seg[0].x - seg[1].x) < .5, vert2 = Math.abs(other[0].x - other[1].x) < .5;
+  if (horiz && horiz2 && Math.abs(seg[0].y - other[0].y) < 7) {
+    const a1 = Math.min(seg[0].x, seg[1].x), a2 = Math.max(seg[0].x, seg[1].x);
+    const b1 = Math.min(other[0].x, other[1].x), b2 = Math.max(other[0].x, other[1].x);
+    const ov = Math.min(a2, b2) - Math.max(a1, b1);
+    if (ov > 6) return { kind: "col", ov, exact: Math.abs(seg[0].y - other[0].y) < .6 };
+  }
+  if (vert && vert2 && Math.abs(seg[0].x - other[0].x) < 7) {
+    const a1 = Math.min(seg[0].y, seg[1].y), a2 = Math.max(seg[0].y, seg[1].y);
+    const b1 = Math.min(other[0].y, other[1].y), b2 = Math.max(other[0].y, other[1].y);
+    const ov = Math.min(a2, b2) - Math.max(a1, b1);
+    if (ov > 6) return { kind: "col", ov, exact: Math.abs(seg[0].x - other[0].x) < .6 };
+  }
+  if ((horiz && vert2) || (vert && horiz2)) return { kind: "cross" };
+  return null;
+}
+// Dos flechas que salen del mismo punto (o entran al mismo) comparten tronco: se premia
+// que viajen juntas en vez de abrirse en canales paralelos.
+function isSibling(a, b) { return a.from === b.from || a.to === b.to; }
+function scorePath(pts, obstacles, placed, keys) {
+  let s = 0;
+  const segs = segsOf(pts);
+  s += (segs.length - 1) * 16;
+  for (const seg of segs) {
+    s += (Math.abs(seg[0].x - seg[1].x) + Math.abs(seg[0].y - seg[1].y)) * 0.012;
+    for (const R of obstacles) if (segRect(seg, R)) s += 500;
+    for (const o of placed) {
+      const r = overlapInfo(seg, o.seg);
+      if (!r) continue;
+      if (r.kind === "cross") { s += 3; continue; }
+      if (isSibling(keys, o.keys)) s -= r.exact ? Math.min(r.ov, 260) * 0.7 : 0;
+      else s += 140 + r.ov * 0.6;
+    }
+  }
+  return s;
+}
+function candidates(A, dA, B, dB, near, all) {
+  const stub = 20;
+  const a = { x: A.x + dA.x * stub, y: A.y + dA.y * stub };
+  const b = { x: B.x + dB.x * stub, y: B.y + dB.y * stub };
+  const out = [];
+  const push = (mids) => out.push(cleanPts([A, a].concat(mids, [b, B])));
+  const hA = dA.x !== 0, hB = dB.x !== 0;
+  const offs = [0, 20, -20, 40, -40, 70, -70, 110, -110, 160, -160];
+
+  if (hA && hB) {
+    for (const o of offs) {
+      const mx = (a.x + b.x) / 2 + o;
+      if (Math.abs(a.y - b.y) < .5 && o === 0) push([]);
+      else push([{ x: mx, y: a.y }, { x: mx, y: b.y }]);
+    }
+    const ys = [near.t - 34, near.b + 34, all.t - 34, all.b + 34, (a.y + b.y) / 2];
+    for (const base of ys) for (const o of [0, 22, -22, 44, -44, 66, -66])
+      push([{ x: a.x, y: base + o }, { x: b.x, y: base + o }]);
+  } else if (!hA && !hB) {
+    for (const o of offs) {
+      const my = (a.y + b.y) / 2 + o;
+      if (Math.abs(a.x - b.x) < .5 && o === 0) push([]);
+      else push([{ x: a.x, y: my }, { x: b.x, y: my }]);
+    }
+    const xs = [near.l - 34, near.r + 34, all.l - 34, all.r + 34, (a.x + b.x) / 2];
+    for (const base of xs) for (const o of [0, 22, -22, 44, -44])
+      push([{ x: base + o, y: a.y }, { x: base + o, y: b.y }]);
+  } else {
+    push([{ x: b.x, y: a.y }]);
+    push([{ x: a.x, y: b.y }]);
+    for (const o of offs) {
+      if (hA) { const mx = (a.x + b.x) / 2 + o; push([{ x: mx, y: a.y }, { x: mx, y: b.y }]); }
+      else { const my = (a.y + b.y) / 2 + o; push([{ x: a.x, y: my }, { x: b.x, y: my }]); }
+    }
+    const ys = [near.t - 34, near.b + 34, all.b + 34, all.t - 34];
+    const xs = [near.l - 34, near.r + 34, all.l - 34, all.r + 34];
+    if (hA) for (const y of ys) push([{ x: a.x, y }, { x: b.x, y }]);
+    else for (const x of xs) push([{ x, y: a.y }, { x, y: b.y }]);
+  }
+  return out;
+}
+function bboxAll() {
+  if (!S.nodes.length) return { l: 0, t: 0, r: 400, b: 300 };
+  let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
+  for (const n of S.nodes) { const R = rectOf(n); l = Math.min(l, R.l); t = Math.min(t, R.t); r = Math.max(r, R.r); b = Math.max(b, R.b); }
+  return { l, t, r, b };
+}
+function routeAll() {
+  const placed = [];
+  const all = bboxAll();
+  const inflate = (R, k) => ({ l: R.l - k, r: R.r + k, t: R.t - k, b: R.b + k });
+  for (const e of S.edges) {
+    const from = getNode(e.from.id), to = getNode(e.to.id);
+    if (!from || !to) { e.pts = null; continue; }
+    const A = portPoint(from, e.from.port), B = portPoint(to, e.to.port);
+    const dA = dirOf(e.from.port), dB = dirOf(e.to.port);
+    const Rf = rectOf(from), Rt = rectOf(to);
+    const near = { l: Math.min(Rf.l, Rt.l), r: Math.max(Rf.r, Rt.r), t: Math.min(Rf.t, Rt.t), b: Math.max(Rf.b, Rt.b) };
+    const obstacles = S.nodes.filter(n => n.id !== from.id && n.id !== to.id && n.type !== "node" && n.type !== "text")
+                             .map(n => inflate(rectOf(n), 9));
+    const keys = { from: e.from.id + ":" + e.from.port, to: e.to.id + ":" + e.to.port };
+    let cands = candidates(A, dA, B, dB, near, all);
+    const scored = cands.map(p => ({ p, s: scorePath(p, obstacles, placed, keys) })).sort((x, y) => x.s - y.s);
+    const uniq = [];
+    for (const c of scored) {
+      const key = c.p.map(q => q.x + "," + q.y).join("|");
+      if (!uniq.some(u => u.key === key)) uniq.push({ key, p: c.p });
+      if (uniq.length > 12) break;
+    }
+    const idx = ((e.variant || 0) % uniq.length + uniq.length) % uniq.length;
+    e.pts = uniq[idx].p;
+    for (const sg of segsOf(e.pts)) placed.push({ seg: sg, keys });
+  }
+}
+function pathD(pts, r) {
+  r = r === undefined ? 6 : r;
+  if (pts.length < 2) return "";
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i], a = pts[i - 1], b = pts[i + 1];
+    const d1 = Math.hypot(p.x - a.x, p.y - a.y), d2 = Math.hypot(b.x - p.x, b.y - p.y);
+    const k = Math.min(r, d1 / 2, d2 / 2);
+    const u1 = { x: (a.x - p.x) / (d1 || 1), y: (a.y - p.y) / (d1 || 1) };
+    const u2 = { x: (b.x - p.x) / (d2 || 1), y: (b.y - p.y) / (d2 || 1) };
+    d += ` L ${p.x + u1.x * k} ${p.y + u1.y * k} Q ${p.x} ${p.y} ${p.x + u2.x * k} ${p.y + u2.y * k}`;
+  }
+  const e = pts[pts.length - 1];
+  d += ` L ${e.x} ${e.y}`;
+  return d;
+}
+
+/* ======================= render ======================= */
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+/* ===================================================================
+   Ecuaciones: G1 · H_2 · K/(s+1) · (s+2)/(s^2+3s+2) · \frac{a}{b} · \omega_n
+   Se arma una cajita por trozo, se mide el ancho real del texto y se
+   apilan numerador y denominador alrededor del eje de la fracción.
+   =================================================================== */
+const SIMBOLOS = { alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",zeta:"ζ",eta:"η",
+  theta:"θ",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",pi:"π",rho:"ρ",sigma:"σ",tau:"τ",
+  phi:"φ",chi:"χ",psi:"ψ",omega:"ω",Gamma:"Γ",Delta:"Δ",Theta:"Θ",Lambda:"Λ",Xi:"Ξ",
+  Pi:"Π",Sigma:"Σ",Phi:"Φ",Psi:"Ψ",Omega:"Ω",infty:"∞",pm:"±",mp:"∓",cdot:"·",times:"×",
+  le:"≤",ge:"≥",ne:"≠",approx:"≈",sqrt:"√",int:"∫",partial:"∂",to:"→" };
+
+function cierre(s, i) {
+  let d = 0;
+  for (let j = i; j < s.length; j++) {
+    const c = s[j];
+    if (c === "(" || c === "[" || c === "{") d++;
+    else if (c === ")" || c === "]" || c === "}") { d--; if (d === 0) return j; }
+  }
+  return -1;
+}
+function nivelCero(s, chars) {
+  const idx = []; let d = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "(" || c === "[" || c === "{") d++;
+    else if (c === ")" || c === "]" || c === "}") d--;
+    else if (d === 0 && chars.indexOf(c) >= 0) idx.push(i);
+  }
+  return idx;
+}
+function sinParentesis(s) {
+  s = s.trim();
+  while (s.length > 1 && s[0] === "(" && cierre(s, 0) === s.length - 1) s = s.slice(1, -1).trim();
+  return s;
+}
+function grupoDe(s, i) {                       // {…} · un carácter · \nombre
+  if (i >= s.length) return null;
+  if (s[i] === "{") { const j = cierre(s, i); if (j < 0) return null; return { txt: s.slice(i + 1, j), end: j + 1 }; }
+  const m = /^\\[A-Za-z]+/.exec(s.slice(i));
+  if (m) return { txt: m[0], end: i + m[0].length };
+  return { txt: s[i], end: i + 1 };
+}
+function parseExpr(src) {
+  const s = String(src == null ? "" : src);
+  const barras = nivelCero(s, "/");
+  const mas = nivelCero(s, "+");
+  const menos = nivelCero(s, "-").filter(i => i > 0 && !/[+\-*/^_(]/.test(s[i - 1]));
+  if (barras.length === 1 && !mas.length && !menos.length) {   // fracción apilada
+    const a = sinParentesis(s.slice(0, barras[0])), b = sinParentesis(s.slice(barras[0] + 1));
+    if (a && b) return [{ t: "frac", num: parseExpr(a), den: parseExpr(b) }];
+  }
+  return tokenizar(s);
+}
+function tokenizar(s) {
+  const out = []; let buf = "";
+  const soltar = () => { if (buf) { out.push({ t: "run", s: buf }); buf = ""; } };
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "\\") {
+      const m = /^\\([A-Za-z]+)/.exec(s.slice(i));
+      if (m && m[1] === "frac") {
+        const g1 = grupoDe(s, i + m[0].length), g2 = g1 ? grupoDe(s, g1.end) : null;
+        if (g1 && g2) { soltar(); out.push({ t: "frac", num: parseExpr(g1.txt), den: parseExpr(g2.txt) }); i = g2.end - 1; continue; }
+      }
+      if (m && SIMBOLOS[m[1]]) { buf += SIMBOLOS[m[1]]; i += m[0].length - 1; continue; }
+      continue;
+    }
+    if (c === "^" || c === "_") {
+      const g = grupoDe(s, i + 1);
+      if (g) { soltar(); out.push({ t: c === "^" ? "sup" : "sub", items: parseExpr(g.txt) }); i = g.end - 1; continue; }
+    }
+    buf += c;
+  }
+  soltar();
+  return out;
+}
+/* medición real del texto usando una capa oculta del propio SVG */
+let _mt = null; const _mcache = new Map();
+function anchoTexto(str, fs) {
+  const k = fs + "|" + str;
+  if (_mcache.has(k)) return _mcache.get(k);
+  if (!_mt) {
+    _mt = el("text", { class: "n-math" }, document.getElementById("gMeasure"));
+    _mt.setAttributeNS("http://www.w3.org/XML/1998/namespace", "xml:space", "preserve");
+  }
+  _mt.setAttribute("font-size", fs);
+  _mt.textContent = str;
+  let w = 0;
+  try { w = _mt.getComputedTextLength(); } catch (e) { w = str.length * fs * .55; }
+  if (!w && str) w = str.length * fs * .55;
+  _mcache.set(k, w);
+  return w;
+}
+function cajaFila(items, fs) {
+  const cajas = items.map(it => cajaDe(it, fs));
+  const w = cajas.reduce((a, c) => a + c.w, 0);
+  const up = Math.max(fs * .55, ...cajas.map(c => c.up));
+  const down = Math.max(fs * .45, ...cajas.map(c => c.down));
+  return { w, up, down, draw(g, x, y) { let cx = x; for (const c of cajas) { c.draw(g, cx, y); cx += c.w; } } };
+}
+function cajaDe(it, fs) {
+  if (it.t === "run") {
+    const w = anchoTexto(it.s, fs);
+    return { w, up: fs * .55, down: fs * .45, draw(g, x, y) {
+      const t = el("text", { class: "n-math", x, y, "font-size": fs }, g);
+      t.setAttributeNS("http://www.w3.org/XML/1998/namespace", "xml:space", "preserve");
+      t.textContent = it.s;
+    } };
+  }
+  if (it.t === "sup" || it.t === "sub") {
+    const f2 = fs * .72, inner = cajaFila(it.items, f2);
+    const dy = it.t === "sup" ? -fs * .34 : fs * .28;
+    return { w: inner.w + fs * .04,
+      up: it.t === "sup" ? -dy + inner.up : fs * .55,
+      down: it.t === "sub" ? dy + inner.down : fs * .45,
+      draw(g, x, y) { inner.draw(g, x, y + dy); } };
+  }
+  if (it.t === "frac") {
+    const num = cajaFila(it.num, fs), den = cajaFila(it.den, fs);
+    const pad = Math.max(4, fs * .28), hueco = fs * .30;
+    const w = Math.max(num.w, den.w) + pad * 2;
+    return { w,
+      up: hueco + num.down + num.up,
+      down: hueco + den.up + den.down,
+      draw(g, x, y) {
+        el("line", { class: "n-bar", x1: x + 1.5, y1: y, x2: x + w - 1.5, y2: y }, g);
+        num.draw(g, x + (w - num.w) / 2, y - hueco - num.down);
+        den.draw(g, x + (w - den.w) / 2, y + hueco + den.up);
+      } };
+  }
+  return { w: 0, up: fs * .55, down: fs * .45, draw() {} };
+}
+function normalizar(label) {                    // G1 -> G_1, como antes
+  const s = String(label == null ? "" : label);
+  const m = /^([A-Za-zΑ-Ωα-ω]+)(\d+)$/.exec(s);
+  return m ? m[1] + "_" + m[2] : s;
+}
+const _bcache = new Map();
+function cajaEtiqueta(label, fs) {
+  const k = fs + "|" + label;
+  if (_bcache.has(k)) return _bcache.get(k);
+  const b = cajaFila(parseExpr(normalizar(label)), fs);
+  _bcache.set(k, b);
+  return b;
+}
+function dibujarMath(g, label, fs, cx, cy) {
+  if (!label) return;
+  const b = cajaEtiqueta(label, fs);
+  b.draw(g, cx - b.w / 2, cy + (b.up - b.down) / 2);
+}
+/* los bloques se agrandan solos para que la ecuación entre cómoda */
+function actualizarTamaños() {
+  for (const n of S.nodes) {
+    if (n.type === "sum" || n.type === "node") continue;
+    const b = cajaEtiqueta(n.label, n.font);
+    if (n.auto === false) continue;
+    const esBloque = n.type === "block";
+    const padX = esBloque ? 15 : 3, padY = esBloque ? 11 : 2;
+    const w = Math.max(esBloque ? 56 : 12, Math.ceil((b.w + padX * 2) / 2) * 2);
+    const h = Math.max(esBloque ? 38 : 14, Math.ceil((b.up + b.down + padY * 2) / 2) * 2);
+    if (n.w !== w || n.h !== h) { n.w = w; n.h = h; }
+  }
+}
+function renderNode(n) {
+  const g = el("g", { class: "node" + (S.sel.includes(n.id) ? " sel" : ""), "data-id": n.id,
+    transform: `translate(${n.x},${n.y})` }, gNodes);
+  if (n.type === "block") {
+    el("rect", { class: "n-shape", x: -n.w / 2, y: -n.h / 2, width: n.w, height: n.h, rx: 0 }, g);
+    dibujarMath(g, n.label, n.font, 0, 0);
+  } else if (n.type === "sum") {
+    const r = Math.min(n.w, n.h) / 2;
+    el("circle", { class: "n-shape", cx: 0, cy: 0, r }, g);
+    if (n.cross) {
+      const k = r * Math.SQRT1_2;
+      el("path", { class: "n-cross", d: `M ${-k} ${-k} L ${k} ${k} M ${k} ${-k} L ${-k} ${k}` }, g);
+    }
+    const fs = Math.max(9, r * .52);
+    for (const k in n.signs) {
+      const sg = n.signs[k];
+      if (!sg) continue;
+      const d = DIRS[k];                     // centrado en el sector de la cruz de ese lado
+      const t = el("text", { class: "n-sign", x: d.x * r * .58, y: d.y * r * .58,
+        "font-size": fs }, g);
+      t.textContent = sg;
+    }
+    if (n.label) dibujarMath(g, n.label, 12, 0, -r - 12);
+  } else if (n.type === "node") {
+    el("circle", { cx: 0, cy: 0, r: 4.5, fill: "#101418", stroke: "none",
+      class: S.sel.includes(n.id) ? "n-dot sel-dot" : "n-dot" }, g);
+    el("circle", { cx: 0, cy: 0, r: 11, fill: "transparent" }, g);
+    if (n.label) dibujarMath(g, n.label, 12, 0, -14);
+  } else {
+    dibujarMath(g, n.label, n.font, 0, 0);
+    el("rect", { x: -n.w / 2, y: -n.h / 2, width: n.w, height: n.h, fill: "transparent" }, g);
+  }
+  if (S.sel.includes(n.id)) {
+    const R = rectOf(n);
+    el("rect", { class: "sel-box", x: R.l - n.x - 4, y: R.t - n.y - 4, width: R.w + 8, height: R.h + 8 }, g);
+  }
+  return g;
+}
+function renderEdge(e) {
+  if (!e.pts) return;
+  const sel = S.selEdges.includes(e.id);
+  const g = el("g", { "data-eid": e.id }, gEdges);
+  el("path", { class: "edge-hit", d: pathD(e.pts, 6) }, g);
+  const tgt = getNode(e.to.id);
+  const noHead = e.arrow === false || (tgt && tgt.type === "node");  // una bifurcación no lleva punta
+  const p = el("path", {
+    class: "edge" + (e.dashed ? " dashed" : "") + (sel ? " sel" : ""),
+    d: pathD(e.pts, 6),
+    "marker-end": noHead ? "" : (sel ? "url(#arrowSel)" : "url(#arrow)")
+  }, g);
+  if (e.width) p.setAttribute("stroke-width", e.width);
+  if (e.label) {
+    const segs = segsOf(e.pts);
+    let best = segs[0], bl = 0;
+    for (const s of segs) { const L = Math.hypot(s[1].x - s[0].x, s[1].y - s[0].y); if (L > bl) { bl = L; best = s; } }
+    const mx = (best[0].x + best[1].x) / 2, my = (best[0].y + best[1].y) / 2;
+    const wpx = e.label.length * 6.4 + 8;
+    el("rect", { class: "e-label-bg", x: mx - wpx / 2, y: my - 9, width: wpx, height: 18, rx: 3 }, g);
+    const t = el("text", { class: "e-label", x: mx, y: my }, g); t.textContent = e.label;
+  }
+}
+// Donde una flecha se desprende del tronco que comparte con su hermana va un punto de unión.
+function junctionDots() {
+  const inSeg = (p, sg) => {
+    const h = Math.abs(sg[0].y - sg[1].y) < .6, v = Math.abs(sg[0].x - sg[1].x) < .6;
+    if (h && Math.abs(p.y - sg[0].y) < .6) {
+      const a = Math.min(sg[0].x, sg[1].x), b = Math.max(sg[0].x, sg[1].x);
+      return p.x > a + 2 && p.x < b - 2;
+    }
+    if (v && Math.abs(p.x - sg[0].x) < .6) {
+      const a = Math.min(sg[0].y, sg[1].y), b = Math.max(sg[0].y, sg[1].y);
+      return p.y > a + 2 && p.y < b - 2;
+    }
+    return false;
+  };
+  const dots = new Map();
+  for (const a of S.edges) {
+    if (!a.pts) continue;
+    for (let i = 1; i < a.pts.length - 1; i++) {
+      const p = a.pts[i];
+      for (const b of S.edges) {
+        if (b === a || !b.pts) continue;
+        if (a.from.id !== b.from.id && a.to.id !== b.to.id) continue;   // sólo hermanas
+        if (segsOf(b.pts).some(sg => inSeg(p, sg))) {
+          dots.set(Math.round(p.x) + "," + Math.round(p.y), p);
+          break;
+        }
+      }
+    }
+  }
+  return Array.from(dots.values());
+}
+function renderPorts() {
+  const ids = new Set(S.sel);
+  const connecting = drag && drag.kind === "connect";
+  const list = (S.mode === "connect" || connecting) ? S.nodes
+             : S.nodes.filter(n => ids.has(n.id) || n.id === hoverNode);
+  for (const n of list) {
+    if (n.type === "node") {
+      for (const p of ["l", "r", "t", "b"]) {
+        const d = DIRS[p];
+        el("line", { class: "port-stem", x1: n.x, y1: n.y, x2: n.x + d.x * 13, y2: n.y + d.y * 13 }, gOv);
+        el("circle", { class: "port", cx: n.x + d.x * 15, cy: n.y + d.y * 15, r: 5.5,
+          "data-port": p, "data-pid": n.id }, gOv);
+      }
+      continue;
+    }
+    for (const p of ["l", "r", "t", "b"]) {
+      const q = portPoint(n, p);
+      el("circle", { class: "port", cx: q.x, cy: q.y, r: 5, "data-port": p, "data-pid": n.id }, gOv);
+    }
+  }
+}
+let hoverNode = null;
+function render() {
+  actualizarTamaños();
+  routeAll();
+  gEdges.textContent = ""; gNodes.textContent = ""; gOv.textContent = "";
+  viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
+  $("#gridbg").style.display = S.showGrid ? "" : "none";
+  for (const e of S.edges) renderEdge(e);
+  for (const p of junctionDots()) el("circle", { cx: p.x, cy: p.y, r: 4.5, fill: "#101418" }, gEdges);
+  for (const n of S.nodes) renderNode(n);
+  renderPorts();
+  if (drag && drag.kind === "connect" && drag.cur) {
+    const a = drag.start;
+    el("path", { class: "ghostline", d: `M ${a.x} ${a.y} L ${drag.cur.x} ${a.y} L ${drag.cur.x} ${drag.cur.y}` }, gOv);
+  }
+  if (drag && drag.kind === "band") {
+    const b = drag.band;
+    el("rect", { class: "band", x: Math.min(b.x1, b.x2), y: Math.min(b.y1, b.y2),
+      width: Math.abs(b.x2 - b.x1), height: Math.abs(b.y2 - b.y1) }, gOv);
+  }
+  $("#st-n").textContent = S.nodes.length;
+  $("#st-e").textContent = S.edges.length;
+  $("#st-s").textContent = (S.sel.length + S.selEdges.length) ? (S.sel.length + " elem · " + S.selEdges.length + " flechas") : "—";
+  $("#zoomlab").textContent = Math.round(S.zoom * 100) + "%";
+  $("#b-undo").disabled = !undoStack.length;
+  $("#b-redo").disabled = !redoStack.length;
+  renderInspector();
+}
+
+/* ======================= inspector ======================= */
+let inspLock = false;
+function renderInspector() {
+  if (inspLock) return;
+  const box = $("#insp");
+  const nsel = S.sel.map(getNode).filter(Boolean);
+  const esel = S.selEdges.map(getEdge).filter(Boolean);
+  if (!nsel.length && !esel.length) {
+    box.innerHTML = `<div class="empty">Nada seleccionado.<br>Elegí un elemento o una flecha para editarlo.<br><br>
+      <span style="font-size:11px">Arrastrá desde los puntos azules para conectar.</span></div>
+      <div class="sec"><h3>Hoja</h3>
+        <div class="row"><label>Fondo</label><div class="fill"><select id="p-grid">
+          <option value="1">Grilla visible</option><option value="0">Hoja limpia</option></select></div></div>
+        <div class="hint">La grilla no se exporta al SVG ni al PNG.</div>
+      </div>`;
+    const g = $("#p-grid"); g.value = S.showGrid ? "1" : "0";
+    g.onchange = () => { S.showGrid = g.value === "1"; render(); };
+    return;
+  }
+  let h = "";
+  if (esel.length) {
+    const e = esel[0];
+    h += `<div class="sec"><h3>Flecha (${esel.length})</h3>
+      <div class="row"><label>Etiqueta</label><div class="fill"><input type="text" id="e-label" value="${escapeHtml(e.label || "")}" placeholder="opcional"></div></div>
+      <div class="row"><label>Trazo</label><div class="fill"><select id="e-style">
+        <option value="solid">Continuo</option><option value="dashed">Punteado</option></select></div></div>
+      <div class="row"><label>Punta</label><div class="fill"><select id="e-arrow">
+        <option value="1">Con flecha</option><option value="0">Sin flecha</option></select></div></div>
+      <div class="row"><label>Grosor</label><div class="fill"><input type="number" id="e-width" step="0.2" min="0.6" max="6" value="${e.width || 1.6}"></div></div>
+      <div class="iconbar" style="margin-top:10px">
+        <button class="btn" id="e-split">Insertar bifurcación</button>
+        <button class="btn" id="e-alt">Ruta alternativa</button>
+        <button class="btn" id="e-reset">Ruta automática</button>
+        <button class="btn" id="e-flip">Invertir sentido</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Las flechas se rutean solas esquivando bloques y otras líneas. Si una no te gusta, probá rutas alternativas.</div>
+      <div class="row" style="margin-top:10px"><label>Origen</label><div class="fill"><select id="e-fp">
+        ${portOpts(e.from.port)}</select></div></div>
+      <div class="row"><label>Destino</label><div class="fill"><select id="e-tp">
+        ${portOpts(e.to.port)}</select></div></div>
+    </div>`;
+  }
+  if (nsel.length) {
+    const n = nsel[0];
+    const T = { block: "Bloque", sum: "Sumador", node: "Bifurcación", io: "Entrada / salida", text: "Texto" }[n.type];
+    h += `<div class="sec"><h3>${T}${nsel.length > 1 ? " (" + nsel.length + ")" : ""}</h3>`;
+    if (n.type !== "node") {
+      h += `<div class="row"><label>Contenido</label><div class="fill"><input type="text" id="n-label" value="${escapeHtml(n.label)}" placeholder="K/(s+1), G_1, C(s)…"></div></div>
+        <div class="row"><label>Tamaño letra</label><div class="fill"><input type="number" id="n-font" min="8" max="40" value="${n.font}"></div></div>`;
+    } else {
+      h += `<div class="row"><label>Nombre</label><div class="fill"><input type="text" id="n-label" value="${escapeHtml(n.label || "")}" placeholder="opcional"></div></div>`;
+    }
+    h += `<div class="hint">Ecuaciones: <b>K/(s+1)</b> arma la fracción apilada, <b>s^2</b> el exponente,
+      <b>H_2</b> el subíndice (o <b>H2</b> directo) y <b>\\omega \\zeta \\tau</b> las griegas.
+      Para forzar la fracción: <b>\\frac{a}{b}</b>.</div></div>`;
+
+    if (n.type === "sum") {
+      h += `<div class="sec"><h3>Signos del sumador</h3>
+        <div class="signbox">
+          <div></div><div>${signSel("t", n.signs.t)}</div><div></div>
+          <div>${signSel("l", n.signs.l)}</div><div class="mid"></div><div>${signSel("r", n.signs.r)}</div>
+          <div></div><div>${signSel("b", n.signs.b)}</div><div></div>
+        </div>
+        <div class="row" style="margin-top:10px"><label>Cruz interna</label><div class="fill"><select id="s-cross">
+          <option value="1">Mostrar</option><option value="0">Ocultar</option></select></div></div>
+        <div class="row"><label>Diámetro</label><div class="fill"><input type="number" id="n-w" min="20" max="120" step="2" value="${n.w}"></div></div>
+        <div class="hint">Vacío = ese lado queda sin signo.</div>
+      </div>`;
+    } else if (n.type === "block" || n.type === "io" || n.type === "text") {
+      const auto = n.auto !== false, dis = auto ? " disabled" : "";
+      h += `<div class="sec"><h3>Geometría</h3>
+        <div class="row"><label>Tamaño</label><div class="fill"><select id="n-auto">
+          <option value="1"${auto ? " selected" : ""}>Ajustar al contenido</option>
+          <option value="0"${auto ? "" : " selected"}>Manual</option></select></div></div>
+        <div class="grid4">
+          <div class="row"><label style="width:22px">An</label><div class="fill"><input type="number" id="n-w" step="2" value="${n.w}"${dis}></div></div>
+          <div class="row"><label style="width:22px">Al</label><div class="fill"><input type="number" id="n-h" step="2" value="${n.h}"${dis}></div></div>
+          <div class="row"><label style="width:22px">X</label><div class="fill"><input type="number" id="n-x" step="${S.grid}" value="${Math.round(n.x)}"></div></div>
+          <div class="row"><label style="width:22px">Y</label><div class="fill"><input type="number" id="n-y" step="${S.grid}" value="${Math.round(n.y)}"></div></div>
+        </div>
+        ${auto ? `<div class="hint" style="margin-top:8px">El bloque crece o se achica solo con la ecuación que escribas.</div>` : ""}
+      </div>`;
+    }
+    h += `<div class="sec"><h3>Acciones</h3><div class="iconbar">
+      <button class="btn" id="n-dup">Duplicar</button>
+      <button class="btn" id="n-del">Borrar</button>
+      <button class="btn" id="n-snap">Imantar</button>
+    </div></div>`;
+  }
+  box.innerHTML = h;
+  wireInspector(nsel, esel);
+}
+const portOpts = (v) => ["l", "r", "t", "b"].map(p =>
+  `<option value="${p}"${p === v ? " selected" : ""}>${{ l: "Izquierda", r: "Derecha", t: "Arriba", b: "Abajo" }[p]}</option>`).join("");
+function signSel(side, val) {
+  const o = (v, t) => `<option value="${v}"${v === val ? " selected" : ""}>${t}</option>`;
+  return `<select class="sgn" data-side="${side}">${o("+", "+")}${o(MINUS, MINUS)}${o("", "—vacío—")}</select>`;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function lock(fn) { inspLock = true; try { fn(); } finally { inspLock = false; } }
+function wireInspector(nsel, esel) {
+  const live = (id, fn) => {
+    const e = document.getElementById(id); if (!e) return;
+    e.addEventListener("input", () => lock(() => { fn(e.value); render(); }));
+    e.addEventListener("change", () => { fn(e.value); commit(); });
+    e.addEventListener("keydown", ev => ev.stopPropagation());
+  };
+  live("n-label", v => nsel.forEach(n => n.label = v));
+  live("n-font", v => nsel.forEach(n => n.font = +v || 14));
+  live("n-w", v => nsel.forEach(n => { n.w = +v || n.w; if (n.type === "sum") n.h = n.w; else n.auto = false; }));
+  live("n-h", v => nsel.forEach(n => { n.h = +v || n.h; n.auto = false; }));
+  live("n-x", v => nsel.forEach(n => n.x = +v));
+  live("n-y", v => nsel.forEach(n => n.y = +v));
+  const autoSel = document.getElementById("n-auto");
+  if (autoSel) autoSel.onchange = () => lock(() => {
+    nsel.forEach(n => n.auto = autoSel.value === "1");
+    commit(); render();
+  });
+  const cross = document.getElementById("s-cross");
+  if (cross) { cross.value = nsel[0].cross ? "1" : "0"; cross.onchange = () => lock(() => { nsel.forEach(n => n.cross = cross.value === "1"); commit(); render(); }); }
+  document.querySelectorAll(".sgn").forEach(sel => {
+    sel.onchange = () => lock(() => { nsel.forEach(n => { if (n.signs) n.signs[sel.dataset.side] = sel.value; }); commit(); render(); });
+  });
+  const bind = (id, fn) => { const e = document.getElementById(id); if (e) e.onclick = () => { fn(); commit(); render(); }; };
+  bind("n-dup", duplicateSel);
+  bind("n-del", deleteSel);
+  bind("n-snap", () => nsel.forEach(n => { n.x = Math.round(n.x / S.grid) * S.grid; n.y = Math.round(n.y / S.grid) * S.grid; }));
+
+  live("e-label", v => esel.forEach(e => e.label = v));
+  live("e-width", v => esel.forEach(e => e.width = +v || 1.6));
+  const st = document.getElementById("e-style");
+  if (st) { st.value = esel[0].dashed ? "dashed" : "solid"; st.onchange = () => lock(() => { esel.forEach(e => e.dashed = st.value === "dashed"); commit(); render(); }); }
+  const ar = document.getElementById("e-arrow");
+  if (ar) { ar.value = esel[0].arrow === false ? "0" : "1"; ar.onchange = () => lock(() => { esel.forEach(e => e.arrow = ar.value === "1"); commit(); render(); }); }
+  bind("e-split", () => esel.forEach(splitEdge));
+  bind("e-alt", () => esel.forEach(e => e.variant = (e.variant || 0) + 1));
+  bind("e-reset", () => esel.forEach(e => e.variant = 0));
+  bind("e-flip", () => esel.forEach(e => { const f = e.from; e.from = e.to; e.to = f; e.variant = 0; }));
+  const fp = document.getElementById("e-fp"), tp = document.getElementById("e-tp");
+  if (fp) fp.onchange = () => lock(() => { esel.forEach(e => { e.from.port = fp.value; e.variant = 0; }); commit(); render(); });
+  if (tp) tp.onchange = () => lock(() => { esel.forEach(e => { e.to.port = tp.value; e.variant = 0; }); commit(); render(); });
+}
+
+/* ======================= historial ======================= */
+let undoStack = [], redoStack = [];
+const snapshot = () => JSON.stringify({ nodes: S.nodes, edges: S.edges, uidc });
+function restore(js) {
+  const d = JSON.parse(js);
+  S.nodes = d.nodes; S.edges = d.edges; uidc = d.uidc || uidc;
+  S.sel = S.sel.filter(id => getNode(id)); S.selEdges = S.selEdges.filter(id => getEdge(id));
+}
+let lastSnap = null;
+function commit() {
+  const s = snapshot();
+  if (s === lastSnap) return;
+  if (lastSnap !== null) { undoStack.push(lastSnap); if (undoStack.length > 120) undoStack.shift(); }
+  redoStack = []; lastSnap = s;
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  const s = undoStack.pop(); restore(s); lastSnap = s; render();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  const s = redoStack.pop(); restore(s); lastSnap = s; render();
+}
+
+/* ======================= interacción ======================= */
+let drag = null, spaceDown = false;
+function toWorld(ev) {
+  const r = svg.getBoundingClientRect();
+  return { x: (ev.clientX - r.left - S.pan.x) / S.zoom, y: (ev.clientY - r.top - S.pan.y) / S.zoom };
+}
+function hitNode(target) {
+  const g = target.closest ? target.closest("[data-id]") : null;
+  return g ? g.getAttribute("data-id") : null;
+}
+svg.addEventListener("pointerdown", ev => {
+  svg.setPointerCapture(ev.pointerId);
+  const w = toWorld(ev);
+  const t = ev.target;
+  // pan
+  if (ev.button === 1 || spaceDown) {
+    drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, px: S.pan.x, py: S.pan.y };
+    svg.classList.add("panning"); return;
+  }
+  // puerto -> conectar
+  if (t.classList && t.classList.contains("port")) {
+    const nid = t.getAttribute("data-pid"), port = t.getAttribute("data-port");
+    const n = getNode(nid);
+    drag = { kind: "connect", fromId: nid, fromPort: port, start: portPoint(n, port), cur: w };
+    render(); return;
+  }
+  // flecha
+  const eg = t.closest ? t.closest("[data-eid]") : null;
+  if (eg) {
+    const id = eg.getAttribute("data-eid");
+    if (pendingAdd === "node") {               // insertar bifurcación en el medio de esta flecha
+      splitEdge(getEdge(id)); setPending(null); commit(); render(); return;
+    }
+    if (ev.shiftKey) { S.selEdges = S.selEdges.includes(id) ? S.selEdges.filter(x => x !== id) : S.selEdges.concat(id); }
+    else { S.selEdges = [id]; S.sel = []; }
+    render(); return;
+  }
+  // nodo
+  const nid = hitNode(t);
+  if (nid) {
+    if (S.mode === "connect") {
+      const n = getNode(nid);
+      const port = nearestPort(n, w);
+      drag = { kind: "connect", fromId: nid, fromPort: port, start: portPoint(n, port), cur: w };
+      render(); return;
+    }
+    if (ev.shiftKey) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
+    else if (!S.sel.includes(nid)) { S.sel = [nid]; S.selEdges = []; }
+    drag = { kind: "move", w0: w, orig: S.sel.map(id => { const n = getNode(id); return { id, x: n.x, y: n.y }; }), moved: false };
+    render(); return;
+  }
+  // vacío -> banda de selección
+  if (!ev.shiftKey) { S.sel = []; S.selEdges = []; }
+  drag = { kind: "band", band: { x1: w.x, y1: w.y, x2: w.x, y2: w.y }, add: ev.shiftKey };
+  render();
+});
+function nearestPort(n, w, fromNode) {
+  if (n.type === "node") {
+    const ref = fromNode ? { x: fromNode.x, y: fromNode.y } : w;
+    const dx = ref.x - n.x, dy = ref.y - n.y;
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "r" : "l";
+    return dy >= 0 ? "b" : "t";
+  }
+  let best = "r", bd = 1e9;
+  for (const p of ["l", "r", "t", "b"]) {
+    const q = portPoint(n, p), d = Math.hypot(q.x - w.x, q.y - w.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+svg.addEventListener("pointermove", ev => {
+  const w = toWorld(ev);
+  if (!drag) {
+    const nid = hitNode(ev.target);
+    if (nid !== hoverNode) { hoverNode = nid; render(); }
+    return;
+  }
+  if (drag.kind === "pan") {
+    S.pan.x = drag.px + (ev.clientX - drag.sx);
+    S.pan.y = drag.py + (ev.clientY - drag.sy);
+    render(); return;
+  }
+  if (drag.kind === "move") {
+    const dx = w.x - drag.w0.x, dy = w.y - drag.w0.y;
+    if (Math.abs(dx) + Math.abs(dy) > 1) drag.moved = true;
+    for (const o of drag.orig) {
+      const n = getNode(o.id); if (!n) continue;
+      n.x = snapV(o.x + dx); n.y = snapV(o.y + dy);
+    }
+    render(); return;
+  }
+  if (drag.kind === "connect") { drag.cur = w; render(); return; }
+  if (drag.kind === "band") { drag.band.x2 = w.x; drag.band.y2 = w.y; render(); return; }
+});
+svg.addEventListener("pointerup", ev => {
+  const w = toWorld(ev);
+  if (!drag) return;
+  if (drag.kind === "connect") {
+    const t = document.elementFromPoint(ev.clientX, ev.clientY);
+    let targetId = null, targetPort = null;
+    if (t && t.classList && t.classList.contains("port")) {
+      targetId = t.getAttribute("data-pid"); targetPort = t.getAttribute("data-port");
+    } else {
+      const nid = t ? hitNode(t) : null;
+      if (nid) { targetId = nid; targetPort = nearestPort(getNode(nid), w, getNode(drag.fromId)); }
+      else {
+        // soltar en el vacío = crear bifurcación ahí y conectar
+        const nn = makeNode("node", snapV(w.x), snapV(w.y));
+        S.nodes.push(nn); targetId = nn.id; targetPort = "l";
+      }
+    }
+    if (targetId && targetId !== drag.fromId) {
+      S.edges.push({ id: uid("e"), from: { id: drag.fromId, port: drag.fromPort },
+        to: { id: targetId, port: targetPort }, variant: 0 });
+      commit();
+    }
+  } else if (drag.kind === "band") {
+    const b = drag.band;
+    const R = { l: Math.min(b.x1, b.x2), r: Math.max(b.x1, b.x2), t: Math.min(b.y1, b.y2), b: Math.max(b.y1, b.y2) };
+    const inside = S.nodes.filter(n => { const r = rectOf(n); return r.l >= R.l && r.r <= R.r && r.t >= R.t && r.b <= R.b; }).map(n => n.id);
+    S.sel = drag.add ? Array.from(new Set(S.sel.concat(inside))) : inside;
+    if (Math.abs(b.x2 - b.x1) < 3 && Math.abs(b.y2 - b.y1) < 3 && pendingAdd) {
+      if (pendingAdd === "node") toast("La bifurcación va sobre una flecha: hacé clic en una línea");
+      else addAt(pendingAdd, snapV(w.x), snapV(w.y));
+    }
+  } else if (drag.kind === "move" && drag.moved) commit();
+  svg.classList.remove("panning");
+  drag = null; render();
+});
+svg.addEventListener("dblclick", ev => {
+  const nid = hitNode(ev.target);
+  if (!nid) return;
+  S.sel = [nid]; S.selEdges = []; render();
+  const inp = document.getElementById("n-label");
+  if (inp) { inp.focus(); inp.select(); }
+});
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  if (ev.shiftKey) { S.pan.x -= ev.deltaY; render(); return; }
+  const r = svg.getBoundingClientRect();
+  const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+  const wx = (mx - S.pan.x) / S.zoom, wy = (my - S.pan.y) / S.zoom;
+  const k = Math.exp(-ev.deltaY * 0.0016);
+  S.zoom = Math.min(4, Math.max(0.2, S.zoom * k));
+  S.pan.x = mx - wx * S.zoom; S.pan.y = my - wy * S.zoom;
+  render();
+}, { passive: false });
+
+/* ======================= alta de elementos ======================= */
+let pendingAdd = null;
+function setPending(type) {
+  pendingAdd = type;
+  document.querySelectorAll(".ptool").forEach(b => b.classList.toggle("on", b.dataset.add === type));
+  svg.classList.toggle("split-mode", type === "node");
+  $("#st-hint").textContent = !type ? ""
+    : type === "node" ? "Hacé clic sobre una flecha: la bifurcación se inserta en su punto medio · Esc cancela"
+    : "Hacé clic en la hoja para colocarlo · Esc cancela";
+}
+function addAt(type, x, y) {
+  const n = makeNode(type, x, y);
+  if (type === "block") n.label = "G" + (S.nodes.filter(m => m.type === "block").length + 1);
+  S.nodes.push(n); S.sel = [n.id]; S.selEdges = [];
+  setPending(null); commit();
+}
+document.querySelectorAll(".ptool").forEach(b => {
+  b.onclick = () => setPending(pendingAdd === b.dataset.add ? null : b.dataset.add);
+});
+
+/* ======================= comandos ======================= */
+function deleteSel() {
+  const ids = new Set(S.sel);
+  S.nodes = S.nodes.filter(n => !ids.has(n.id));
+  S.edges = S.edges.filter(e => !ids.has(e.from.id) && !ids.has(e.to.id) && !S.selEdges.includes(e.id));
+  S.sel = []; S.selEdges = [];
+}
+function duplicateSel() {
+  const map = {};
+  const copies = S.sel.map(getNode).filter(Boolean).map(n => {
+    const c = JSON.parse(JSON.stringify(n));
+    c.id = uid("n"); c.x += S.grid * 2; c.y += S.grid * 2; map[n.id] = c.id;
+    return c;
+  });
+  const eCopies = S.edges.filter(e => map[e.from.id] && map[e.to.id]).map(e => ({
+    id: uid("e"), from: { id: map[e.from.id], port: e.from.port },
+    to: { id: map[e.to.id], port: e.to.port }, variant: 0, label: e.label, dashed: e.dashed
+  }));
+  S.nodes.push(...copies); S.edges.push(...eCopies);
+  S.sel = copies.map(c => c.id); S.selEdges = [];
+}
+function splitEdge(e) {
+  if (!e.pts || e.pts.length < 2) return;
+  const segs = segsOf(e.pts);
+  const len = (sg) => Math.hypot(sg[1].x - sg[0].x, sg[1].y - sg[0].y);
+  const total = segs.reduce((a, sg) => a + len(sg), 0);
+  // punto medio real del recorrido de la flecha
+  let acc = 0, best = segs[0], mid = null;
+  for (const sg of segs) {
+    const L = len(sg);
+    if (acc + L >= total / 2 && L >= 24) {
+      const k = (total / 2 - acc) / L;
+      best = sg; mid = { x: sg[0].x + (sg[1].x - sg[0].x) * k, y: sg[0].y + (sg[1].y - sg[0].y) * k };
+      break;
+    }
+    acc += L;
+  }
+  if (!mid) {                                  // recorrido muy quebrado: uso el tramo más largo
+    best = segs.reduce((a, b) => len(b) > len(a) ? b : a, segs[0]);
+    mid = { x: (best[0].x + best[1].x) / 2, y: (best[0].y + best[1].y) / 2 };
+  }
+  const horiz = Math.abs(best[0].y - best[1].y) < .5;
+  const nn = makeNode("node", snapV(mid.x), snapV(mid.y));
+  if (horiz) nn.y = Math.round(mid.y); else nn.x = Math.round(mid.x);   // queda justo sobre la línea
+  S.nodes.push(nn);
+  const goingPos = horiz ? best[1].x > best[0].x : best[1].y > best[0].y;
+  const inPort = horiz ? (goingPos ? "l" : "r") : (goingPos ? "t" : "b");
+  const outPort = { l: "r", r: "l", t: "b", b: "t" }[inPort];
+  S.edges.push({ id: uid("e"), from: { id: nn.id, port: outPort }, to: e.to, variant: 0,
+    label: e.label, dashed: e.dashed, arrow: e.arrow, width: e.width });
+  e.to = { id: nn.id, port: inPort };
+  e.label = ""; e.variant = 0;
+  S.sel = [nn.id]; S.selEdges = [];
+}
+function align(kind) {
+  const ns = S.sel.map(getNode).filter(Boolean);
+  if (ns.length < 2) { toast("Elegí al menos dos elementos"); return; }
+  const rs = ns.map(rectOf);
+  if (kind === "left") { const v = Math.min(...rs.map(r => r.l)); ns.forEach((n, i) => n.x = v + rs[i].w / 2); }
+  if (kind === "right") { const v = Math.max(...rs.map(r => r.r)); ns.forEach((n, i) => n.x = v - rs[i].w / 2); }
+  if (kind === "top") { const v = Math.min(...rs.map(r => r.t)); ns.forEach((n, i) => n.y = v + rs[i].h / 2); }
+  if (kind === "bottom") { const v = Math.max(...rs.map(r => r.b)); ns.forEach((n, i) => n.y = v - rs[i].h / 2); }
+  if (kind === "cx") { const v = ns.reduce((a, n) => a + n.x, 0) / ns.length; ns.forEach(n => n.x = snapV(v)); }
+  if (kind === "cy") { const v = ns.reduce((a, n) => a + n.y, 0) / ns.length; ns.forEach(n => n.y = snapV(v)); }
+  if (kind === "dh") {
+    const s = ns.slice().sort((a, b) => a.x - b.x);
+    const step = (s[s.length - 1].x - s[0].x) / (s.length - 1);
+    s.forEach((n, i) => n.x = snapV(s[0].x + step * i));
+  }
+  if (kind === "dv") {
+    const s = ns.slice().sort((a, b) => a.y - b.y);
+    const step = (s[s.length - 1].y - s[0].y) / (s.length - 1);
+    s.forEach((n, i) => n.y = snapV(s[0].y + step * i));
+  }
+  S.edges.forEach(e => e.variant = 0);
+  commit(); render();
+}
+function fit() {
+  if (!S.nodes.length) { S.zoom = 1; S.pan = { x: 60, y: 40 }; render(); return; }
+  const b = bboxAll(), r = svg.getBoundingClientRect(), m = 60;
+  const z = Math.min((r.width - m * 2) / Math.max(1, b.r - b.l), (r.height - m * 2) / Math.max(1, b.b - b.t), 2);
+  S.zoom = Math.max(.2, z);
+  S.pan.x = (r.width - (b.r - b.l) * S.zoom) / 2 - b.l * S.zoom;
+  S.pan.y = (r.height - (b.b - b.t) * S.zoom) / 2 - b.t * S.zoom;
+  render();
+}
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1900);
+}
+
+/* ======================= exportar ======================= */
+function buildExportSVG() {
+  const b = bboxAll(), m = 30;
+  const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
+  const s = document.createElementNS(NS, "svg");
+  s.setAttribute("xmlns", NS);
+  s.setAttribute("width", W); s.setAttribute("height", H);
+  s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
+  const defs = document.createElementNS(NS, "defs");
+  defs.innerHTML = `<marker id="arrow" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
+    orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="#101418"/></marker>`;
+  s.appendChild(defs);
+  const style = document.createElementNS(NS, "style");
+  style.textContent = `.n-shape{fill:#fff;stroke:#101418;stroke-width:1.6}
+    .n-label,.n-sign,.e-label{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central}
+    .n-math{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:start;dominant-baseline:central}
+    .n-bar{stroke:#101418;stroke-width:1.4;fill:none}
+    .n-cross{stroke:#101418;stroke-width:1.4;fill:none}
+    .edge{stroke:#101418;stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
+    .edge.dashed{stroke-dasharray:6 4}.e-label-bg{fill:#fff}`;
+  s.appendChild(style);
+  const bg = document.createElementNS(NS, "rect");
+  bg.setAttribute("x", b.l - m); bg.setAttribute("y", b.t - m);
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#fff");
+  s.appendChild(bg);
+  const selN = S.sel, selE = S.selEdges;
+  S.sel = []; S.selEdges = []; render();
+  const ge = gEdges.cloneNode(true), gn = gNodes.cloneNode(true);
+  ge.querySelectorAll(".edge-hit").forEach(x => x.remove());
+  s.appendChild(ge); s.appendChild(gn);
+  S.sel = selN; S.selEdges = selE; render();
+  return { svg: s, W, H };
+}
+function download(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+$("#b-svg").onclick = () => {
+  if (!S.nodes.length) return toast("La hoja está vacía");
+  const { svg: s } = buildExportSVG();
+  download("diagrama-bloques.svg", new Blob([new XMLSerializer().serializeToString(s)], { type: "image/svg+xml" }));
+  toast("SVG descargado");
+};
+$("#b-png").onclick = () => {
+  if (!S.nodes.length) return toast("La hoja está vacía");
+  const { svg: s, W, H } = buildExportSVG();
+  const str = new XMLSerializer().serializeToString(s);
+  const img = new Image();
+  img.onload = () => {
+    const sc = 3, c = document.createElement("canvas");
+    c.width = W * sc; c.height = H * sc;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(bl => { download("diagrama-bloques.png", bl); toast("PNG descargado (3×)"); });
+  };
+  img.onerror = () => toast("No se pudo generar el PNG");
+  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(str)));
+};
+$("#b-save").onclick = () => {
+  download("diagrama-bloques.json", new Blob([JSON.stringify({ nodes: S.nodes, edges: S.edges }, null, 1)], { type: "application/json" }));
+  toast("Diagrama guardado");
+};
+$("#b-open").onclick = () => {
+  $("#io-text").value = ""; $("#ov-io").classList.add("show"); $("#io-text").focus();
+};
+$("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
+$("#io-ok").onclick = () => {
+  try {
+    const d = JSON.parse($("#io-text").value);
+    S.nodes = d.nodes || []; S.edges = d.edges || [];
+    uidc = S.nodes.length + S.edges.length + 100;
+    S.sel = []; S.selEdges = []; commit(); fit(); render();
+    $("#ov-io").classList.remove("show"); toast("Diagrama cargado");
+  } catch (err) { toast("Ese JSON no se pudo leer"); }
+};
+
+/* ======================= barra superior ======================= */
+$("#m-select").onclick = () => setMode("select");
+$("#m-connect").onclick = () => setMode("connect");
+function setMode(m) {
+  S.mode = m;
+  $("#m-select").classList.toggle("on", m === "select");
+  $("#m-connect").classList.toggle("on", m === "connect");
+  svg.classList.toggle("mode-connect", m === "connect");
+  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un elemento a otro para crear la flecha" : "";
+  render();
+}
+$("#b-undo").onclick = undo;
+$("#b-redo").onclick = redo;
+$("#b-del").onclick = () => { deleteSel(); commit(); render(); };
+$("#b-dup").onclick = () => { duplicateSel(); commit(); render(); };
+document.querySelectorAll("[data-align]").forEach(b => b.onclick = () => align(b.dataset.align));
+$("#b-snap").onclick = () => { S.snap = !S.snap; $("#b-snap").classList.toggle("on", S.snap); };
+$("#gridsize").onchange = e => {
+  S.grid = +e.target.value;
+  $("#gridPat").setAttribute("width", S.grid); $("#gridPat").setAttribute("height", S.grid);
+  $("#gridPat").firstElementChild.setAttribute("d", `M${S.grid} 0H0V${S.grid}`);
+  $("#gridPat10").setAttribute("width", S.grid * 5); $("#gridPat10").setAttribute("height", S.grid * 5);
+  $("#gridPat10").firstElementChild.setAttribute("width", S.grid * 5);
+  $("#gridPat10").firstElementChild.setAttribute("height", S.grid * 5);
+  $("#gridPat10").lastElementChild.setAttribute("d", `M${S.grid * 5} 0H0V${S.grid * 5}`);
+  render();
+};
+$("#b-gridshow").onclick = () => { S.showGrid = !S.showGrid; render(); };
+$("#b-snapall").onclick = () => {
+  S.nodes.forEach(n => { n.x = Math.round(n.x / S.grid) * S.grid; n.y = Math.round(n.y / S.grid) * S.grid; });
+  S.edges.forEach(e => e.variant = 0);
+  commit(); render(); toast("Todo alineado a la grilla");
+};
+$("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
+$("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
+$("#b-fit").onclick = fit;
+$("#b-help").onclick = () => $("#ov-help").classList.add("show");
+$("#b-clear").onclick = () => {
+  if (!S.nodes.length || confirm("¿Vaciar la hoja? Se borra todo el diagrama.")) {
+    S.nodes = []; S.edges = []; S.sel = []; S.selEdges = []; commit(); render();
+  }
+};
+$("#b-example").onclick = () => { loadExample(); toast("Ejemplo cargado"); };
+
+/* ======================= teclado ======================= */
+window.addEventListener("keydown", ev => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
+  const k = ev.key.toLowerCase();
+  if (ev.code === "Space") { spaceDown = true; ev.preventDefault(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "y") { ev.preventDefault(); redo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "d") { ev.preventDefault(); duplicateSel(); commit(); render(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "a") { ev.preventDefault(); S.sel = S.nodes.map(n => n.id); render(); return; }
+  if (ev.ctrlKey || ev.metaKey) return;
+  if (k === "delete" || k === "backspace") { ev.preventDefault(); deleteSel(); commit(); render(); return; }
+  if (k === "escape") { setPending(null); S.sel = []; S.selEdges = []; render(); return; }
+  if (k === "v") return setMode("select");
+  if (k === "c") return setMode("connect");
+  if (k === "b") return setPending("block");
+  if (k === "s") return setPending("sum");
+  if (k === "n") return setPending("node");
+  if (k === "e") return setPending("io");
+  if (k === "t") return setPending("text");
+  if (k === "f") return fit();
+  if (k === "?") return $("#ov-help").classList.add("show");
+  if (ev.key.startsWith("Arrow") && S.sel.length) {
+    ev.preventDefault();
+    const d = ev.shiftKey ? 1 : S.grid;
+    const dx = ev.key === "ArrowLeft" ? -d : ev.key === "ArrowRight" ? d : 0;
+    const dy = ev.key === "ArrowUp" ? -d : ev.key === "ArrowDown" ? d : 0;
+    S.sel.map(getNode).forEach(n => { if (n) { n.x += dx; n.y += dy; } });
+    render(); clearTimeout(window._kt); window._kt = setTimeout(commit, 400);
+  }
+});
+window.addEventListener("keyup", ev => { if (ev.code === "Space") spaceDown = false; });
+$("#ov-help").addEventListener("click", e => { if (e.target.id === "ov-help") e.currentTarget.classList.remove("show"); });
+$("#ov-io").addEventListener("click", e => { if (e.target.id === "ov-io") e.currentTarget.classList.remove("show"); });
+
+/* ======================= ejemplo (Ejercicio N° 9) ======================= */
+function loadExample() {
+  S.nodes = []; S.edges = []; S.sel = []; S.selEdges = []; uidc = 1;
+  const N = {};
+  const add = (key, type, x, y, extra) => { const n = makeNode(type, x, y, extra); N[key] = n.id; S.nodes.push(n); return n; };
+  const link = (a, ap, b, bp) => S.edges.push({ id: uid("e"), from: { id: N[a], port: ap }, to: { id: N[b], port: bp }, variant: 0 });
+
+  add("R", "io", 60, 300, { label: "R(s)" });
+  add("s1", "sum", 180, 300, { signs: { l: "+", t: "", r: "", b: MINUS } });
+  add("G1", "block", 300, 300, { label: "G1" });
+  add("s2", "sum", 420, 300, { signs: { l: "+", t: "", r: "", b: MINUS } });
+  add("s3", "sum", 540, 300, { signs: { l: "+", t: "", r: "", b: MINUS } });
+  add("br1", "node", 620, 300);
+  add("G4", "block", 720, 200, { label: "G4" });
+  add("G2", "block", 720, 300, { label: "G2" });
+  add("s4", "sum", 860, 300, { signs: { l: "+", t: "+", r: "", b: MINUS } });
+  add("G3", "block", 980, 300, { label: "G3" });
+  add("br2", "node", 1080, 300);
+  add("C", "io", 1160, 300, { label: "C(s)" });
+  add("H3", "block", 960, 400, { label: "H3" });
+  add("H4", "block", 840, 480, { label: "H4" });
+  add("H2", "block", 700, 400, { label: "H2" });
+  add("H1", "block", 560, 560, { label: "H1" });
+
+  link("R", "r", "s1", "l");
+  link("s1", "r", "G1", "l");
+  link("G1", "r", "s2", "l");
+  link("s2", "r", "s3", "l");
+  link("s3", "r", "br1", "l");
+  link("br1", "r", "G2", "l");
+  link("br1", "t", "G4", "l");
+  link("G2", "r", "s4", "l");
+  link("G4", "r", "s4", "t");
+  link("s4", "r", "G3", "l");
+  link("G3", "r", "br2", "l");
+  link("br2", "r", "C", "l");
+  link("br2", "b", "H3", "r");
+  link("H3", "l", "s4", "b");
+  link("br2", "b", "H4", "r");
+  link("H4", "l", "s3", "b");
+  link("G2", "b", "H2", "r");
+  link("H2", "l", "s2", "b");
+  link("br2", "b", "H1", "r");
+  link("H1", "l", "s1", "b");
+
+  commit(); fit(); render();
+}
+
+/* ======================= arranque ======================= */
+loadExample();
+setMode("select");
+lastSnap = snapshot();
+window.addEventListener("resize", render);
+</script>
+</body>
+</html>

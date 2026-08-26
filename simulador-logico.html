@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de circuitos lógicos</title>
+<meta name="description" content="Compuertas, cables con ruteo automático, simulación en vivo y tabla de verdad">
+<style>
+:root{
+  --ink:#12181f;
+  --ink-2:#3d4b5a;
+  --line:#d7dee6;
+  --line-2:#eef2f6;
+  --paper:#ffffff;
+  --shell:#f2f5f8;
+  --accent:#0d5bd6;
+  --accent-soft:#e3edff;
+  --on:#12a150;
+  --on-soft:#e4f6ec;
+  --off:#9aa5ae;
+  --warn:#c2410c;
+  --ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+  --draw:Arial,Helvetica,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--ui);color:var(--ink);background:var(--shell);
+  display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;
+  background:var(--paper);border-bottom:1px solid var(--line);z-index:5}
+.brand{display:flex;align-items:baseline;gap:8px;margin-right:4px}
+.brand b{font-size:14px;letter-spacing:-.01em}
+.brand span{font-family:var(--mono);font-size:10px;color:#8a97a5;letter-spacing:.08em;text-transform:uppercase}
+.group{display:flex;align-items:center;gap:4px;padding-right:12px;border-right:1px solid var(--line-2)}
+.group:last-child{border-right:0}
+.glab{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;text-transform:uppercase;margin-right:2px}
+button,select,input{font-family:var(--ui);font-size:12px;color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 9px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;line-height:1;transition:background .12s,border-color .12s;white-space:nowrap}
+.btn:hover{background:var(--line-2)}
+.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.on svg{stroke:#fff}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--line-2)}
+.btn svg{width:14px;height:14px;stroke:var(--ink-2);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.chip{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:0 6px}
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;background:var(--paper);overflow:hidden}
+svg#canvas{width:100%;height:100%;display:block;touch-action:none}
+svg#canvas.mode-connect{cursor:crosshair}
+svg#canvas.panning{cursor:grabbing}
+#palette{position:absolute;top:12px;left:12px;background:var(--paper);border:1px solid var(--line);
+  border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:2px;
+  box-shadow:0 6px 24px rgba(18,24,31,.08);max-height:calc(100% - 24px);overflow:auto}
+#palette .ptitle{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;padding:2px 4px 4px}
+#palette .sep{height:1px;background:var(--line-2);margin:4px 2px}
+.ptool{width:166px;display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;
+  border-radius:7px;padding:5px 8px;cursor:pointer;text-align:left}
+.ptool:hover{background:var(--line-2)}
+.ptool.on{background:var(--accent-soft);border-color:#b9d2ff}
+.ptool svg{width:38px;height:24px;flex:none;overflow:visible}
+.ptool .glyph-body{fill:var(--paper);stroke:var(--ink);stroke-width:1.5}
+.ptool .glyph-wire{stroke:var(--ink);stroke-width:1.4;fill:none}
+.ptool span{font-size:12px}
+.ptool kbd{margin-left:auto;font-family:var(--mono);font-size:10px;color:#93a0ae}
+#inspector{width:272px;flex:none;background:var(--paper);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;overflow-y:auto}
+.sec{padding:12px 14px;border-bottom:1px solid var(--line-2)}
+.sec h3{margin:0 0 10px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:#93a0ae;font-weight:600}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.row:last-child{margin-bottom:0}
+.row label{font-size:11.5px;color:var(--ink-2);width:78px;flex:none}
+.row .fill{flex:1;min-width:0}
+input[type=text],input[type=number],select{width:100%;border:1px solid var(--line);border-radius:6px;
+  padding:5px 7px;background:var(--paper)}
+input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.hint{font-size:11px;color:#8a97a5;line-height:1.5}
+.empty{padding:24px 16px;text-align:center;color:#93a0ae;font-size:12px;line-height:1.6}
+.iconbar{display:flex;flex-wrap:wrap;gap:4px}
+kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line);border-bottom-width:2px;
+  border-radius:4px;padding:1px 4px;font-size:10px}
+/* panel de control */
+.io-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.io-name{font-family:var(--mono);font-size:12px;font-weight:600;width:56px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw{border:1px solid var(--line);border-radius:20px;width:44px;height:23px;position:relative;
+  cursor:pointer;background:var(--line-2);flex:none;transition:background .14s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;
+  background:var(--paper);box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .14s}
+.sw.on{background:var(--on)}
+.sw.on::after{transform:translateX(21px)}
+.bit{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--off);width:16px;text-align:center}
+.bit.on{color:var(--on)}
+.lamp{width:14px;height:14px;border-radius:50%;background:var(--line-2);border:1.5px solid var(--line);flex:none}
+.lamp.on{background:var(--on);border-color:var(--on);box-shadow:0 0 0 3px var(--on-soft)}
+#status{display:flex;align-items:center;gap:16px;padding:5px 14px;background:var(--paper);
+  border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:#8a97a5}
+#status .k{color:var(--ink-2)}
+#status .warn{color:var(--warn)}
+#toast{position:absolute;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);
+  color:#fff;font-size:12px;padding:8px 14px;border-radius:8px;opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s;z-index:20}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.overlay{position:fixed;inset:0;background:rgba(18,24,31,.45);display:none;align-items:center;
+  justify-content:center;z-index:40;padding:20px}
+.overlay.show{display:flex}
+.modal{background:var(--paper);border-radius:12px;max-width:640px;width:100%;max-height:82vh;overflow:auto;
+  padding:22px 24px;box-shadow:0 20px 60px rgba(18,24,31,.3)}
+.modal h2{margin:0 0 4px;font-size:16px}
+.modal p.sub{margin:0 0 16px;color:#8a97a5;font-size:12px}
+.modal table{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)}
+.modal th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#93a0ae;
+  padding:6px 8px;border-bottom:1px solid var(--line);text-align:center}
+.modal td{padding:4px 8px;text-align:center;border-bottom:1px solid var(--line-2)}
+.modal tr.now{background:var(--accent-soft)}
+.modal td.v1{color:var(--on);font-weight:600}
+.modal td.sep{border-left:1px solid var(--line)}
+.modal th.sep{border-left:1px solid var(--line)}
+.expr{font-family:var(--mono);font-size:12.5px;background:var(--line-2);border:1px solid var(--line);
+  border-radius:8px;padding:9px 11px;margin-bottom:6px;overflow-x:auto;white-space:nowrap}
+.expr b{color:var(--accent)}
+.help td{padding:5px 0;border-bottom:1px solid var(--line-2);vertical-align:top;text-align:left;font-family:var(--ui)}
+.help td:first-child{width:150px;white-space:nowrap}
+textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
+  border-radius:8px;padding:8px;resize:vertical}
+/* dibujo */
+.g-body{fill:var(--paper);stroke:#101418;stroke-width:1.7;stroke-linejoin:round}
+.g-stub{stroke:#101418;stroke-width:1.5;fill:none}
+.g-label{font-family:var(--draw);fill:#101418;text-anchor:middle;dominant-baseline:central;
+  pointer-events:none;user-select:none}
+.wire{fill:none;stroke:var(--off);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.wire.hi{stroke:var(--on);stroke-width:2.2}
+.wire.sel{stroke:var(--accent);stroke-dasharray:6 3}
+.wire-hit{stroke:transparent;stroke-width:14;fill:none;cursor:pointer}
+.dot{fill:var(--off)}.dot.hi{fill:var(--on)}
+.sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.sel .g-body{stroke:var(--accent)}
+.pin{fill:var(--paper);stroke:var(--accent);stroke-width:1.4;cursor:crosshair}
+.pin:hover{fill:var(--accent)}
+.pin.taken{stroke:var(--off)}
+.band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+.ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
+.led-off{fill:#eef1f4;stroke:#101418;stroke-width:1.7}
+.led-on{fill:var(--on);stroke:#0b7a3c;stroke-width:1.7}
+.sw-track{fill:#eef1f4;stroke:#101418;stroke-width:1.7}
+.sw-track.on{fill:var(--on-soft)}
+.sw-knob{fill:#fff;stroke:#101418;stroke-width:1.7}
+.sw-knob.on{fill:var(--on);stroke:#0b7a3c}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>Circuitos lógicos</b><span>simulador</span></div>
+
+  <div class="group">
+    <span class="glab">Modo</span>
+    <button class="btn on" id="m-select" title="Seleccionar / mover (V)">
+      <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg>Selección</button>
+    <button class="btn" id="m-connect" title="Conectar (C)">
+      <svg viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M13 8l4 4-4 4"/><circle cx="20" cy="12" r="1.5"/></svg>Cablear</button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Edición</span>
+    <button class="btn ghost" id="b-undo" title="Deshacer (Ctrl+Z)">
+      <svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 010 10h-3"/></svg></button>
+    <button class="btn ghost" id="b-redo" title="Rehacer (Ctrl+Y)">
+      <svg viewBox="0 0 24 24"><path d="M15 14l4-4-4-4"/><path d="M19 10h-9a5 5 0 000 10h3"/></svg></button>
+    <button class="btn ghost" id="b-dup" title="Duplicar (Ctrl+D)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg></button>
+    <button class="btn ghost" id="b-del" title="Borrar (Supr)">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg></button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Alinear</span>
+    <button class="btn ghost" data-align="left" title="Izquierda"><svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4"/><rect x="7" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="cx" title="Mismo eje X"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="5" y="6" width="14" height="4"/><rect x="8" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="cy" title="Misma línea"><svg viewBox="0 0 24 24"><path d="M3 12h18"/><rect x="6" y="5" width="4" height="14"/><rect x="14" y="8" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="dv" title="Distribuir vertical"><svg viewBox="0 0 24 24"><path d="M4 3h16M4 21h16"/><rect x="8" y="10" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="dh" title="Distribuir horizontal"><svg viewBox="0 0 24 24"><path d="M3 4v16M21 4v16"/><rect x="10" y="8" width="4" height="8"/></svg></button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Grilla</span>
+    <button class="btn on" id="b-snap" title="Imantar"><svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>Imán</button>
+    <button class="btn ghost" id="b-gridshow" title="Ver grilla"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M4 12h16M12 4v16"/></svg></button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Vista</span>
+    <button class="btn ghost" id="b-zoomout"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-4-4"/></svg></button>
+    <span class="chip" id="zoomlab">100%</span>
+    <button class="btn ghost" id="b-zoomin"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M20 20l-4-4"/></svg></button>
+    <button class="btn ghost" id="b-fit" title="Encuadrar (F)">Encuadrar</button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Circuito</span>
+    <button class="btn" id="b-truth" title="Tabla de verdad (T)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"/><path d="M3 9h18M9 9v11"/></svg>Tabla de verdad</button>
+    <select id="ejemplos" style="width:126px" title="Cargar un circuito de ejemplo">
+      <option value="">Ejemplos…</option>
+      <option value="half">Semisumador</option>
+      <option value="full">Sumador completo</option>
+      <option value="latch">Latch SR</option>
+      <option value="mux">Multiplexor 2 a 1</option>
+    </select>
+    <button class="btn ghost" id="b-clear">Vaciar</button>
+  </div>
+
+  <div class="group">
+    <span class="glab">Archivo</span>
+    <button class="btn ghost" id="b-svg">SVG</button>
+    <button class="btn ghost" id="b-png">PNG</button>
+    <button class="btn ghost" id="b-save">Guardar</button>
+    <button class="btn ghost" id="b-open">Abrir</button>
+    <button class="btn ghost" id="b-help">?</button>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="canvas">
+      <defs>
+        <pattern id="gridPat" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M20 0H0V20" fill="none" stroke="#e8edf3" stroke-width="1"/>
+        </pattern>
+        <pattern id="gridPat10" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#gridPat)"/>
+          <path d="M100 0H0V100" fill="none" stroke="#dbe3ec" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <g id="viewport">
+        <rect id="gridbg" x="-6000" y="-6000" width="14000" height="14000" fill="url(#gridPat10)"/>
+        <g id="gWires"></g>
+        <g id="gNodes"></g>
+        <g id="gOverlay"></g>
+      </g>
+    </svg>
+    <div id="palette"><div class="ptitle">COMPUERTAS</div></div>
+    <div id="toast"></div>
+  </div>
+
+  <aside id="inspector"><div id="insp"></div></aside>
+</main>
+
+<div id="status">
+  <span><span class="k">Compuertas</span> <span id="st-n">0</span></span>
+  <span><span class="k">Cables</span> <span id="st-e">0</span></span>
+  <span><span class="k">Selección</span> <span id="st-s">—</span></span>
+  <span id="st-warn"></span>
+  <span id="st-hint" style="margin-left:auto"></span>
+</div>
+
+<div class="overlay" id="ov-truth"><div class="modal">
+  <h2>Tabla de verdad</h2>
+  <p class="sub" id="tt-sub"></p>
+  <div id="tt-body"></div>
+</div></div>
+
+<div class="overlay" id="ov-help"><div class="modal">
+  <h2>Cómo se usa</h2>
+  <p class="sub">El circuito se simula solo: cada cambio recalcula y los cables en 1 se pintan de verde.</p>
+  <table class="help">
+    <tr><td>Clic en un interruptor</td><td>Cambia su valor entre 0 y 1</td></tr>
+    <tr><td>Arrastrar desde un pin</td><td>Cablea salida → entrada. Cada entrada admite un solo cable; una salida puede ir a varias</td></tr>
+    <tr><td><kbd>V</kbd> / <kbd>C</kbd></td><td>Modo selección / modo cablear</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td>AND, OR, NOT, NAND, NOR, XOR, XNOR</td></tr>
+    <tr><td><kbd>I</kbd> / <kbd>O</kbd> / <kbd>L</kbd></td><td>Entrada, salida, texto</td></tr>
+    <tr><td><kbd>T</kbd></td><td>Tabla de verdad con la expresión simplificada</td></tr>
+    <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar</td></tr>
+    <tr><td>Flechas</td><td>Mover un paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
+    <tr><td>Rueda / Espacio</td><td>Zoom / mover la hoja</td></tr>
+  </table>
+  <div style="margin-top:16px;text-align:right"><button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button></div>
+</div></div>
+
+<div class="overlay" id="ov-io"><div class="modal">
+  <h2>Abrir circuito</h2>
+  <p class="sub">Pegá el JSON de un circuito guardado.</p>
+  <textarea id="io-text" spellcheck="false"></textarea>
+  <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" id="io-cancel">Cancelar</button>
+    <button class="btn on" id="io-ok">Cargar</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+const $ = (s) => document.querySelector(s);
+const svg = $("#canvas"), viewport = $("#viewport");
+const gWires = $("#gWires"), gNodes = $("#gNodes"), gOv = $("#gOverlay");
+
+/* ======================= tipos ======================= */
+const T = {
+  and:  { w: 56, h: 44, pins: 2, nombre: "AND",  var: true },
+  or:   { w: 58, h: 44, pins: 2, nombre: "OR",   var: true },
+  xor:  { w: 62, h: 44, pins: 2, nombre: "XOR",  var: true },
+  nand: { w: 56, h: 44, pins: 2, nombre: "NAND", var: true, bubble: true },
+  nor:  { w: 58, h: 44, pins: 2, nombre: "NOR",  var: true, bubble: true },
+  xnor: { w: 62, h: 44, pins: 2, nombre: "XNOR", var: true, bubble: true },
+  not:  { w: 44, h: 36, pins: 1, nombre: "NOT",  bubble: true },
+  buf:  { w: 44, h: 36, pins: 1, nombre: "Buffer" },
+  in:   { w: 48, h: 30, pins: 0, nombre: "Entrada" },
+  out:  { w: 30, h: 30, pins: 1, nombre: "Salida" },
+  label:{ w: 60, h: 20, pins: 0, nombre: "Texto" }
+};
+const STUB = 10;                     // largo de las patitas
+const bodyW = (n) => T[n.type].w;
+const bodyH = (n) => n.type === "label" ? T.label.h
+  : Math.max(T[n.type].h, (nIn(n) > 2 ? nIn(n) * 17 + 12 : T[n.type].h));
+const nIn = (n) => n.type === "out" ? 1 : (T[n.type].var ? (n.pins || 2) : T[n.type].pins);
+const bubR = (n) => T[n.type].bubble ? 5 : 0;
+const outX = (n) => bodyW(n) / 2 + bubR(n) * 2 + STUB;
+const inX  = (n) => -bodyW(n) / 2 - STUB;
+
+let uidc = 1; const uid = (p) => p + (uidc++);
+let S = { nodes: [], wires: [], sel: [], selW: [], mode: "select", snap: true, grid: 20,
+  showGrid: true, zoom: 1, pan: { x: 80, y: 60 } };
+let VAL = new Map(), OSC = false;
+
+const getNode = (id) => S.nodes.find(n => n.id === id);
+const getWire = (id) => S.wires.find(w => w.id === id);
+
+function makeNode(type, x, y, extra) {
+  const n = Object.assign({ id: uid("n"), type, x, y, label: "" }, extra || {});
+  if (T[type].var) n.pins = n.pins || 2;
+  if (type === "in") { n.on = !!n.on; n.label = n.label || proximaLetra(); }
+  if (type === "out") n.label = n.label || "S";
+  if (type === "label") n.label = n.label || "Texto";
+  return n;
+}
+function proximaLetra() {
+  const usadas = new Set(S.nodes.filter(n => n.type === "in").map(n => n.label));
+  for (let i = 0; i < 26; i++) { const l = String.fromCharCode(65 + i); if (!usadas.has(l)) return l; }
+  return "X";
+}
+
+/* ======================= geometría ======================= */
+function rectOf(n) {
+  const w = bodyW(n), h = bodyH(n);
+  const l = n.x - w / 2 - (nIn(n) ? STUB : 0), r = n.x + w / 2 + bubR(n) * 2 + (n.type === "label" ? 0 : STUB);
+  return { l, r, t: n.y - h / 2, b: n.y + h / 2, w: r - l, h, cx: n.x, cy: n.y };
+}
+function pinPoint(n, pin) {
+  if (pin === "o") return { x: n.x + outX(n), y: n.y };
+  const k = nIn(n), h = bodyH(n);
+  const y = k === 1 ? n.y : n.y - h / 2 + h * (pin + 1) / (k + 1);
+  return { x: n.x + inX(n), y: Math.round(y * 2) / 2 };
+}
+const pinDir = (pin) => pin === "o" ? { x: 1, y: 0 } : { x: -1, y: 0 };
+const snapV = (v) => S.snap ? Math.round(v / S.grid) * S.grid : Math.round(v);
+function bboxAll() {
+  if (!S.nodes.length) return { l: 0, t: 0, r: 400, b: 300 };
+  let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
+  for (const n of S.nodes) { const R = rectOf(n); l = Math.min(l, R.l); t = Math.min(t, R.t); r = Math.max(r, R.r); b = Math.max(b, R.b); }
+  return { l, t, r, b };
+}
+
+/* ======================= ruteo ortogonal ======================= */
+function cleanPts(pts) {
+  const out = [];
+  for (const p of pts) {
+    const q = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+    if (out.length && Math.abs(out[out.length - 1].x - q.x) < .3 && Math.abs(out[out.length - 1].y - q.y) < .3) continue;
+    out.push(q);
+  }
+  const res = [];
+  for (let i = 0; i < out.length; i++) {
+    if (i > 0 && i < out.length - 1) {
+      const a = out[i - 1], b = out[i], c = out[i + 1];
+      if ((Math.abs(a.x - b.x) < .3 && Math.abs(b.x - c.x) < .3) ||
+          (Math.abs(a.y - b.y) < .3 && Math.abs(b.y - c.y) < .3)) continue;
+    }
+    res.push(out[i]);
+  }
+  return res;
+}
+function segsOf(pts) { const s = []; for (let i = 0; i < pts.length - 1; i++) s.push([pts[i], pts[i + 1]]); return s; }
+function segRect(sg, R) {
+  const x1 = Math.min(sg[0].x, sg[1].x), x2 = Math.max(sg[0].x, sg[1].x);
+  const y1 = Math.min(sg[0].y, sg[1].y), y2 = Math.max(sg[0].y, sg[1].y);
+  return !(x2 < R.l || x1 > R.r || y2 < R.t || y1 > R.b);
+}
+function overlapInfo(sg, other) {
+  const h1 = Math.abs(sg[0].y - sg[1].y) < .5, h2 = Math.abs(other[0].y - other[1].y) < .5;
+  const v1 = Math.abs(sg[0].x - sg[1].x) < .5, v2 = Math.abs(other[0].x - other[1].x) < .5;
+  if (h1 && h2 && Math.abs(sg[0].y - other[0].y) < 7) {
+    const a1 = Math.min(sg[0].x, sg[1].x), a2 = Math.max(sg[0].x, sg[1].x);
+    const b1 = Math.min(other[0].x, other[1].x), b2 = Math.max(other[0].x, other[1].x);
+    const ov = Math.min(a2, b2) - Math.max(a1, b1);
+    if (ov > 6) return { kind: "col", ov, exact: Math.abs(sg[0].y - other[0].y) < .6 };
+  }
+  if (v1 && v2 && Math.abs(sg[0].x - other[0].x) < 7) {
+    const a1 = Math.min(sg[0].y, sg[1].y), a2 = Math.max(sg[0].y, sg[1].y);
+    const b1 = Math.min(other[0].y, other[1].y), b2 = Math.max(other[0].y, other[1].y);
+    const ov = Math.min(a2, b2) - Math.max(a1, b1);
+    if (ov > 6) return { kind: "col", ov, exact: Math.abs(sg[0].x - other[0].x) < .6 };
+  }
+  if ((h1 && v2) || (v1 && h2)) return { kind: "cross" };
+  return null;
+}
+// dos cables que salen de la misma salida comparten tronco: se premia que viajen juntos
+const hermanos = (a, b) => a.from === b.from;
+function scorePath(pts, obst, placed, keys) {
+  let s = (segsOf(pts).length - 1) * 16;
+  for (const sg of segsOf(pts)) {
+    s += (Math.abs(sg[0].x - sg[1].x) + Math.abs(sg[0].y - sg[1].y)) * 0.012;
+    for (const R of obst) if (segRect(sg, R)) s += 500;
+    for (const o of placed) {
+      const r = overlapInfo(sg, o.seg);
+      if (!r) continue;
+      if (r.kind === "cross") { s += 3; continue; }
+      if (hermanos(keys, o.keys)) s -= r.exact ? Math.min(r.ov, 260) * 0.7 : 0;
+      else s += 140 + r.ov * 0.6;
+    }
+  }
+  return s;
+}
+function candidatos(A, dA, B, dB, near, all) {
+  const st = 16;
+  const a = { x: A.x + dA.x * st, y: A.y + dA.y * st }, b = { x: B.x + dB.x * st, y: B.y + dB.y * st };
+  const out = [], push = (m) => out.push(cleanPts([A, a].concat(m, [b, B])));
+  const offs = [0, 20, -20, 40, -40, 70, -70, 110, -110, 160, -160];
+  for (const o of offs) {
+    const mx = (a.x + b.x) / 2 + o;
+    if (Math.abs(a.y - b.y) < .5 && o === 0) push([]);
+    else push([{ x: mx, y: a.y }, { x: mx, y: b.y }]);
+  }
+  for (const base of [near.t - 30, near.b + 30, all.t - 30, all.b + 30])
+    for (const o of [0, 20, -20, 40, -40, 60, -60])
+      push([{ x: a.x, y: base + o }, { x: b.x, y: base + o }]);
+  for (const o of offs) push([{ x: a.x, y: (a.y + b.y) / 2 + o }, { x: b.x, y: (a.y + b.y) / 2 + o }]);
+  return out;
+}
+function routeAll() {
+  const placed = [], all = bboxAll();
+  const infl = (R, k) => ({ l: R.l - k, r: R.r + k, t: R.t - k, b: R.b + k });
+  for (const w of S.wires) {
+    const from = getNode(w.from.id), to = getNode(w.to.id);
+    if (!from || !to) { w.pts = null; continue; }
+    const A = pinPoint(from, "o"), B = pinPoint(to, w.to.pin);
+    const Rf = rectOf(from), Rt = rectOf(to);
+    const near = { l: Math.min(Rf.l, Rt.l), r: Math.max(Rf.r, Rt.r), t: Math.min(Rf.t, Rt.t), b: Math.max(Rf.b, Rt.b) };
+    const obst = S.nodes.filter(n => n.id !== from.id && n.id !== to.id && n.type !== "label")
+      .map(n => infl(rectOf(n), 7));
+    const keys = { from: w.from.id, to: w.to.id + ":" + w.to.pin };
+    const cands = candidatos(A, pinDir("o"), B, pinDir(w.to.pin), near, all);
+    const orden = cands.map(p => ({ p, s: scorePath(p, obst, placed, keys) })).sort((x, y) => x.s - y.s);
+    const uniq = [];
+    for (const c of orden) {
+      const k = c.p.map(q => q.x + "," + q.y).join("|");
+      if (!uniq.some(u => u.k === k)) uniq.push({ k, p: c.p });
+      if (uniq.length > 10) break;
+    }
+    w.pts = uniq[((w.variant || 0) % uniq.length + uniq.length) % uniq.length].p;
+    for (const sg of segsOf(w.pts)) placed.push({ seg: sg, keys });
+  }
+}
+function pathD(pts, r) {
+  r = r === undefined ? 5 : r;
+  if (!pts || pts.length < 2) return "";
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i], a = pts[i - 1], b = pts[i + 1];
+    const d1 = Math.hypot(p.x - a.x, p.y - a.y), d2 = Math.hypot(b.x - p.x, b.y - p.y);
+    const k = Math.min(r, d1 / 2, d2 / 2);
+    d += ` L ${p.x + (a.x - p.x) / (d1 || 1) * k} ${p.y + (a.y - p.y) / (d1 || 1) * k}` +
+         ` Q ${p.x} ${p.y} ${p.x + (b.x - p.x) / (d2 || 1) * k} ${p.y + (b.y - p.y) / (d2 || 1) * k}`;
+  }
+  const e = pts[pts.length - 1];
+  return d + ` L ${e.x} ${e.y}`;
+}
+function junctionDots() {
+  const inSeg = (p, sg) => {
+    const h = Math.abs(sg[0].y - sg[1].y) < .6, v = Math.abs(sg[0].x - sg[1].x) < .6;
+    if (h && Math.abs(p.y - sg[0].y) < .6) {
+      const a = Math.min(sg[0].x, sg[1].x), b = Math.max(sg[0].x, sg[1].x);
+      return p.x > a + 2 && p.x < b - 2;
+    }
+    if (v && Math.abs(p.x - sg[0].x) < .6) {
+      const a = Math.min(sg[0].y, sg[1].y), b = Math.max(sg[0].y, sg[1].y);
+      return p.y > a + 2 && p.y < b - 2;
+    }
+    return false;
+  };
+  const dots = new Map();
+  for (const a of S.wires) {
+    if (!a.pts) continue;
+    for (let i = 1; i < a.pts.length - 1; i++) {
+      const p = a.pts[i];
+      for (const b of S.wires) {
+        if (b === a || !b.pts || a.from.id !== b.from.id) continue;
+        if (segsOf(b.pts).some(sg => inSeg(p, sg))) {
+          dots.set(Math.round(p.x) + "," + Math.round(p.y), { p, id: a.from.id });
+          break;
+        }
+      }
+    }
+  }
+  return Array.from(dots.values());
+}
+
+/* ======================= lógica ======================= */
+function evalGate(t, v) {
+  const some = v.some(x => x === 1), every = v.every(x => x === 1);
+  const par = v.reduce((a, b) => a ^ (b === 1 ? 1 : 0), 0);
+  switch (t) {
+    case "and": return every ? 1 : 0;
+    case "nand": return every ? 0 : 1;
+    case "or": return some ? 1 : 0;
+    case "nor": return some ? 0 : 1;
+    case "xor": return par;
+    case "xnor": return par ? 0 : 1;
+    case "not": return v[0] === 1 ? 0 : 1;
+    case "buf": case "out": return v[0] === 1 ? 1 : 0;
+    default: return 0;
+  }
+}
+function simulate(nodes, wires, prev) {
+  const val = new Map();
+  for (const n of nodes) val.set(n.id, n.type === "in" ? (n.on ? 1 : 0) : (prev && prev.get(n.id)) || 0);
+  const src = new Map();
+  for (const n of nodes) src.set(n.id, []);
+  for (const w of wires) { const a = src.get(w.to.id); if (a) a[w.to.pin] = w.from.id; }
+  let osc = false;
+  const orden = nodes.filter(n => n.type !== "in" && n.type !== "label");
+  for (let pass = 0; ; pass++) {
+    let cambio = false;
+    for (const n of orden) {
+      const s = src.get(n.id) || [], k = nIn(n), v = [];
+      for (let i = 0; i < k; i++) v.push(s[i] !== undefined ? (val.get(s[i]) || 0) : 0);
+      const r = evalGate(n.type, v);
+      if (r !== val.get(n.id)) { val.set(n.id, r); cambio = true; }
+    }
+    if (!cambio) break;
+    if (pass > 60) { osc = true; break; }
+  }
+  return { val, osc };
+}
+function correr() { const r = simulate(S.nodes, S.wires, VAL); VAL = r.val; OSC = r.osc; }
+function truthTable() {
+  const ins = S.nodes.filter(n => n.type === "in").sort((a, b) => a.x - b.x || a.y - b.y);
+  const outs = S.nodes.filter(n => n.type === "out").sort((a, b) => a.y - b.y || a.x - b.x);
+  if (!ins.length || !outs.length) return null;
+  if (ins.length > 10) return { demasiadas: ins.length };
+  const copia = S.nodes.map(n => Object.assign({}, n));
+  const rows = [], total = 1 << ins.length;
+  for (let m = 0; m < total; m++) {
+    for (let i = 0; i < ins.length; i++)
+      copia.find(n => n.id === ins[i].id).on = !!((m >> (ins.length - 1 - i)) & 1);
+    const { val, osc } = simulate(copia, S.wires);
+    rows.push({ m, in: ins.map((n, i) => (m >> (ins.length - 1 - i)) & 1),
+      out: outs.map(o => val.get(o.id) || 0), osc });
+  }
+  return { ins, outs, rows };
+}
+function simplify(minterms, n) {
+  if (!minterms.length) return "0";
+  if (minterms.length === (1 << n)) return "1";
+  let grupo = minterms.map(m => ({ bits: m, mask: 0 }));
+  const primos = [];
+  while (grupo.length) {
+    const sig = new Map(), usado = new Array(grupo.length).fill(false);
+    for (let i = 0; i < grupo.length; i++) for (let j = i + 1; j < grupo.length; j++) {
+      const a = grupo[i], b = grupo[j];
+      if (a.mask !== b.mask) continue;
+      const dif = a.bits ^ b.bits;
+      if (dif && (dif & (dif - 1)) === 0) {
+        usado[i] = usado[j] = true;
+        const bits = a.bits & ~dif, mask = a.mask | dif;
+        sig.set(bits + "/" + mask, { bits, mask });
+      }
+    }
+    grupo.forEach((g, i) => { if (!usado[i] && !primos.some(p => p.bits === g.bits && p.mask === g.mask)) primos.push(g); });
+    grupo = Array.from(sig.values());
+  }
+  const cubre = (p, m) => (m & ~p.mask) === p.bits;
+  const falta = new Set(minterms), elegidos = [];
+  for (const m of minterms) {
+    const c = primos.filter(p => cubre(p, m));
+    if (c.length === 1 && !elegidos.includes(c[0])) elegidos.push(c[0]);
+  }
+  for (const p of elegidos) for (const m of Array.from(falta)) if (cubre(p, m)) falta.delete(m);
+  while (falta.size) {
+    let mejor = null, cuenta = -1;
+    for (const p of primos) {
+      if (elegidos.includes(p)) continue;
+      let c = 0; for (const m of falta) if (cubre(p, m)) c++;
+      if (c > cuenta) { cuenta = c; mejor = p; }
+    }
+    if (!mejor || cuenta <= 0) break;
+    elegidos.push(mejor);
+    for (const m of Array.from(falta)) if (cubre(mejor, m)) falta.delete(m);
+  }
+  return elegidos.map(p => termino(p, n)).join(" + ") || "0";
+}
+function termino(p, n, nombres) {
+  let s = "";
+  for (let i = 0; i < n; i++) {
+    const bit = 1 << (n - 1 - i);
+    if (p.mask & bit) continue;
+    s += (nombres ? nombres[i] : String.fromCharCode(65 + i)) + ((p.bits & bit) ? "" : "'");
+  }
+  return s || "1";
+}
+
+/* ======================= dibujo de compuertas ======================= */
+function shapePath(type, w, h) {
+  const l = -w / 2, r = w / 2, t = -h / 2, b = h / 2;
+  if (type === "and" || type === "nand")
+    return `M ${l} ${t} H ${r - h / 2} A ${h / 2} ${h / 2} 0 0 1 ${r - h / 2} ${b} H ${l} Z`;
+  if (type === "or" || type === "nor" || type === "xor" || type === "xnor")
+    return `M ${l} ${t} C ${l + w * .55} ${t} ${l + w * .92} ${t * .5} ${r} 0` +
+           ` C ${l + w * .92} ${b * .5} ${l + w * .55} ${b} ${l} ${b}` +
+           ` Q ${l + w * .30} 0 ${l} ${t} Z`;
+  if (type === "not" || type === "buf") return `M ${l} ${t} L ${r} 0 L ${l} ${b} Z`;
+  return `M ${l} ${t} H ${r} V ${b} H ${l} Z`;
+}
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function drawGate(g, n, cls) {
+  const w = bodyW(n), h = bodyH(n), k = nIn(n), esOr = /^(or|nor|xor|xnor)$/.test(n.type);
+  if (n.type === "xor" || n.type === "xnor")
+    el("path", { class: "g-stub", d: `M ${-w / 2 - 6} ${-h / 2} Q ${-w / 2 + w * .30 - 6} 0 ${-w / 2 - 6} ${h / 2}` }, g);
+  el("path", { class: cls, d: shapePath(n.type, w, h) }, g);
+  if (T[n.type].bubble) el("circle", { class: cls, cx: w / 2 + bubR(n), cy: 0, r: bubR(n) }, g);
+  // patitas: en las OR apoyan justo sobre la curva cóncava de atrás
+  const desfase = (n.type === "xor" || n.type === "xnor") ? -6 : 0;
+  for (let i = 0; i < k; i++) {
+    const p = pinPoint(n, i), y = p.y - n.y;
+    const t = (1 - 2 * y / h) / 2;                    // parámetro de la curva a esa altura
+    const xEnd = esOr ? -w / 2 + desfase + 0.6 * w * t * (1 - t) : -w / 2;
+    el("line", { class: "g-stub", x1: inX(n), y1: y, x2: xEnd, y2: y }, g);
+  }
+  el("line", { class: "g-stub", x1: w / 2 + bubR(n) * 2, y1: 0, x2: outX(n), y2: 0 }, g);
+  if (n.label) el("text", { class: "g-label", x: 0, y: -h / 2 - 10, "font-size": 12 }, g).textContent = n.label;
+}
+function renderNode(n) {
+  const on = VAL.get(n.id) === 1;
+  const g = el("g", { class: "node" + (S.sel.includes(n.id) ? " sel" : ""), "data-id": n.id,
+    transform: `translate(${n.x},${n.y})` }, gNodes);
+  if (n.type === "in") {
+    const w = T.in.w, h = T.in.h;
+    el("rect", { class: "sw-track" + (n.on ? " on" : ""), x: -w / 2, y: -h / 2, width: w, height: h, rx: h / 2 }, g);
+    el("circle", { class: "sw-knob" + (n.on ? " on" : ""), cx: (n.on ? 1 : -1) * (w / 2 - h / 2), cy: 0, r: h / 2 - 4.5 }, g);
+    el("text", { class: "g-label", x: 0, y: -h / 2 - 11, "font-size": 13 }, g).textContent = n.label;
+    el("text", { class: "g-label", x: (n.on ? -1 : 1) * 11, y: 0, "font-size": 11,
+      fill: n.on ? "#0b7a3c" : "#7c8894" }, g).textContent = n.on ? "1" : "0";
+    el("line", { class: "g-stub", x1: w / 2, y1: 0, x2: outX(n), y2: 0 }, g);
+  } else if (n.type === "out") {
+    el("circle", { class: on ? "led-on" : "led-off", cx: 0, cy: 0, r: 14 }, g);
+    el("text", { class: "g-label", x: 0, y: 0, "font-size": 12,
+      fill: on ? "#ffffff" : "#7c8894" }, g).textContent = on ? "1" : "0";
+    el("text", { class: "g-label", x: 0, y: -25, "font-size": 13 }, g).textContent = n.label;
+    el("line", { class: "g-stub", x1: -14, y1: 0, x2: inX(n), y2: 0 }, g);
+  } else if (n.type === "label") {
+    el("text", { class: "g-label", x: 0, y: 0, "font-size": n.font || 14 }, g).textContent = n.label;
+    el("rect", { x: -T.label.w / 2, y: -T.label.h / 2, width: T.label.w, height: T.label.h, fill: "transparent" }, g);
+  } else {
+    drawGate(g, n, "g-body");
+  }
+  if (S.sel.includes(n.id)) {
+    const R = rectOf(n);
+    el("rect", { class: "sel-box", x: R.l - n.x - 4, y: R.t - n.y - 4, width: R.w + 8, height: R.h + 8 }, g);
+  }
+}
+function renderWire(w) {
+  if (!w.pts) return;
+  const on = VAL.get(w.from.id) === 1;
+  const g = el("g", { "data-wid": w.id }, gWires);
+  el("path", { class: "wire-hit", d: pathD(w.pts) }, g);
+  el("path", { class: "wire" + (on ? " hi" : "") + (S.selW.includes(w.id) ? " sel" : ""), d: pathD(w.pts) }, g);
+}
+function ocupada(id, pin) { return S.wires.some(w => w.to.id === id && w.to.pin === pin); }
+function renderPins() {
+  const conectando = drag && drag.kind === "connect";
+  const ids = new Set(S.sel);
+  const list = (S.mode === "connect" || conectando) ? S.nodes
+    : S.nodes.filter(n => ids.has(n.id) || n.id === hoverNode);
+  for (const n of list) {
+    if (n.type === "label") continue;
+    if (n.type !== "in") for (let i = 0; i < nIn(n); i++) {
+      const p = pinPoint(n, i);
+      el("circle", { class: "pin" + (ocupada(n.id, i) ? " taken" : ""), cx: p.x, cy: p.y, r: 5,
+        "data-pid": n.id, "data-pin": i }, gOv);
+    }
+    if (n.type !== "out") {
+      const p = pinPoint(n, "o");
+      el("circle", { class: "pin", cx: p.x, cy: p.y, r: 5, "data-pid": n.id, "data-pin": "o" }, gOv);
+    }
+  }
+}
+let hoverNode = null;
+function render() {
+  correr(); routeAll();
+  gWires.textContent = ""; gNodes.textContent = ""; gOv.textContent = "";
+  viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
+  $("#gridbg").style.display = S.showGrid ? "" : "none";
+  for (const w of S.wires) renderWire(w);
+  for (const d of junctionDots())
+    el("circle", { class: "dot" + (VAL.get(d.id) === 1 ? " hi" : ""), cx: d.p.x, cy: d.p.y, r: 4 }, gWires);
+  for (const n of S.nodes) renderNode(n);
+  renderPins();
+  if (drag && drag.kind === "connect" && drag.cur)
+    el("path", { class: "ghostline", d: `M ${drag.start.x} ${drag.start.y} L ${drag.cur.x} ${drag.start.y} L ${drag.cur.x} ${drag.cur.y}` }, gOv);
+  if (drag && drag.kind === "band") {
+    const b = drag.band;
+    el("rect", { class: "band", x: Math.min(b.x1, b.x2), y: Math.min(b.y1, b.y2),
+      width: Math.abs(b.x2 - b.x1), height: Math.abs(b.y2 - b.y1) }, gOv);
+  }
+  $("#st-n").textContent = S.nodes.filter(n => n.type !== "label").length;
+  $("#st-e").textContent = S.wires.length;
+  $("#st-s").textContent = (S.sel.length + S.selW.length) ? S.sel.length + " · " + S.selW.length + " cables" : "—";
+  const sueltas = S.nodes.reduce((a, n) => a + (n.type === "in" || n.type === "label" ? 0 :
+    Array.from({ length: nIn(n) }).filter((_, i) => !ocupada(n.id, i)).length), 0);
+  $("#st-warn").innerHTML = OSC ? '<span class="warn">el circuito oscila: revisá la realimentación</span>'
+    : sueltas ? `<span class="k">entradas sin conectar</span> ${sueltas}` : "";
+  $("#zoomlab").textContent = Math.round(S.zoom * 100) + "%";
+  $("#b-undo").disabled = !undoStack.length;
+  $("#b-redo").disabled = !redoStack.length;
+  renderInspector();
+}
+
+/* ======================= inspector ======================= */
+let inspLock = false;
+function renderInspector() {
+  if (inspLock) return;
+  const box = $("#insp");
+  const nsel = S.sel.map(getNode).filter(Boolean), wsel = S.selW.map(getWire).filter(Boolean);
+  let h = "";
+  if (wsel.length) {
+    h += `<div class="sec"><h3>Cable (${wsel.length})</h3>
+      <div class="iconbar"><button class="btn" id="w-alt">Ruta alternativa</button>
+      <button class="btn" id="w-reset">Ruta automática</button>
+      <button class="btn" id="w-del">Borrar</button></div>
+      <div class="hint" style="margin-top:8px">Los cables se rutean solos esquivando compuertas; los que salen de la misma salida comparten tronco.</div></div>`;
+  }
+  if (nsel.length) {
+    const n = nsel[0];
+    h += `<div class="sec"><h3>${T[n.type].nombre}${nsel.length > 1 ? " (" + nsel.length + ")" : ""}</h3>`;
+    h += `<div class="row"><label>Nombre</label><div class="fill"><input type="text" id="n-label" value="${esc(n.label || "")}" placeholder="${n.type === "in" ? "A" : n.type === "out" ? "S" : "opcional"}"></div></div>`;
+    if (T[n.type].var)
+      h += `<div class="row"><label>Entradas</label><div class="fill"><select id="n-pins">
+        ${[2,3,4,5].map(k => `<option value="${k}"${k === nIn(n) ? " selected" : ""}>${k}</option>`).join("")}</select></div></div>`;
+    if (n.type === "in")
+      h += `<div class="row"><label>Valor</label><div class="fill"><button class="btn" id="n-toggle" style="width:100%">${n.on ? "1 — pasar a 0" : "0 — pasar a 1"}</button></div></div>`;
+    h += `<div class="row"><label>Posición</label><div class="fill" style="display:flex;gap:6px">
+      <input type="number" id="n-x" step="${S.grid}" value="${Math.round(n.x)}">
+      <input type="number" id="n-y" step="${S.grid}" value="${Math.round(n.y)}"></div></div>`;
+    h += `<div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="n-dup">Duplicar</button><button class="btn" id="n-del">Borrar</button></div></div>`;
+  }
+  // panel de control siempre visible
+  const ins = S.nodes.filter(n => n.type === "in"), outs = S.nodes.filter(n => n.type === "out");
+  h += `<div class="sec"><h3>Entradas</h3>`;
+  h += ins.length ? ins.map(n => `<div class="io-row">
+      <span class="io-name">${esc(n.label)}</span>
+      <span class="sw${n.on ? " on" : ""}" data-sw="${n.id}" role="button" tabindex="0"></span>
+      <span class="bit${n.on ? " on" : ""}">${n.on ? 1 : 0}</span></div>`).join("")
+    : `<div class="hint">Todavía no hay interruptores. Insertá uno con <kbd>I</kbd>.</div>`;
+  h += `</div><div class="sec"><h3>Salidas</h3>`;
+  h += outs.length ? outs.map(n => { const v = VAL.get(n.id) === 1;
+      return `<div class="io-row"><span class="io-name">${esc(n.label)}</span>
+        <span class="lamp${v ? " on" : ""}"></span><span class="bit${v ? " on" : ""}">${v ? 1 : 0}</span></div>`; }).join("")
+    : `<div class="hint">Agregá una salida con <kbd>O</kbd> para ver el resultado.</div>`;
+  h += `</div>`;
+  if (!nsel.length && !wsel.length)
+    h += `<div class="empty">Elegí una compuerta o un cable para editarlo.<br>
+      <span style="font-size:11px">Arrastrá de un pin a otro para cablear.</span></div>`;
+  box.innerHTML = h;
+  wireInspector(nsel, wsel);
+}
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function lock(fn) { inspLock = true; try { fn(); } finally { inspLock = false; } }
+function wireInspector(nsel, wsel) {
+  const live = (id, fn) => {
+    const e = document.getElementById(id); if (!e) return;
+    e.addEventListener("input", () => lock(() => { fn(e.value); render(); }));
+    e.addEventListener("change", () => { fn(e.value); commit(); });
+    e.addEventListener("keydown", ev => ev.stopPropagation());
+  };
+  live("n-label", v => nsel.forEach(n => n.label = v));
+  live("n-x", v => nsel.forEach(n => n.x = +v));
+  live("n-y", v => nsel.forEach(n => n.y = +v));
+  const pins = document.getElementById("n-pins");
+  if (pins) pins.onchange = () => lock(() => {
+    nsel.forEach(n => {
+      const k = +pins.value;
+      S.wires = S.wires.filter(w => !(w.to.id === n.id && w.to.pin >= k));
+      n.pins = k;
+    });
+    commit(); render();
+  });
+  const bind = (id, fn) => { const e = document.getElementById(id); if (e) e.onclick = () => { fn(); commit(); render(); }; };
+  bind("n-toggle", () => nsel.forEach(n => { if (n.type === "in") n.on = !n.on; }));
+  bind("n-dup", duplicar);
+  bind("n-del", borrar);
+  bind("w-del", borrar);
+  bind("w-alt", () => wsel.forEach(w => w.variant = (w.variant || 0) + 1));
+  bind("w-reset", () => wsel.forEach(w => w.variant = 0));
+  document.querySelectorAll("[data-sw]").forEach(sw => {
+    sw.onclick = () => { const n = getNode(sw.dataset.sw); if (n) { n.on = !n.on; commit(); render(); } };
+    sw.onkeydown = ev => { if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); sw.onclick(); } };
+  });
+}
+
+/* ======================= historial ======================= */
+let undoStack = [], redoStack = [], lastSnap = null;
+const snapshot = () => JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, variant: w.variant })), uidc });
+function restore(js) {
+  const d = JSON.parse(js);
+  S.nodes = d.nodes; S.wires = d.wires; uidc = d.uidc || uidc;
+  S.sel = S.sel.filter(getNode); S.selW = S.selW.filter(getWire);
+}
+function commit() {
+  const s = snapshot();
+  if (s === lastSnap) return;
+  if (lastSnap !== null) { undoStack.push(lastSnap); if (undoStack.length > 120) undoStack.shift(); }
+  redoStack = []; lastSnap = s;
+}
+function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); const s = undoStack.pop(); restore(s); lastSnap = s; render(); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); const s = redoStack.pop(); restore(s); lastSnap = s; render(); }
+
+/* ======================= interacción ======================= */
+let drag = null, spaceDown = false, pendiente = null;
+function toWorld(ev) {
+  const r = svg.getBoundingClientRect();
+  return { x: (ev.clientX - r.left - S.pan.x) / S.zoom, y: (ev.clientY - r.top - S.pan.y) / S.zoom };
+}
+const hitNode = (t) => { const g = t.closest ? t.closest("[data-id]") : null; return g ? g.getAttribute("data-id") : null; };
+function pinCercano(n, w) {
+  let best = "o", bd = 1e9;
+  const cand = [];
+  if (n.type !== "out") cand.push("o");
+  if (n.type !== "in") for (let i = 0; i < nIn(n); i++) cand.push(i);
+  for (const p of cand) {
+    const q = pinPoint(n, p), d = Math.hypot(q.x - w.x, q.y - w.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+svg.addEventListener("pointerdown", ev => {
+  svg.setPointerCapture(ev.pointerId);
+  const w = toWorld(ev), t = ev.target;
+  if (ev.button === 1 || spaceDown) {
+    drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, px: S.pan.x, py: S.pan.y };
+    svg.classList.add("panning"); return;
+  }
+  if (t.classList && t.classList.contains("pin")) {
+    const id = t.getAttribute("data-pid"), pin = t.getAttribute("data-pin");
+    const n = getNode(id), p = pin === "o" ? "o" : +pin;
+    drag = { kind: "connect", fromId: id, fromPin: p, start: pinPoint(n, p), cur: w };
+    render(); return;
+  }
+  const wg = t.closest ? t.closest("[data-wid]") : null;
+  if (wg) {
+    const id = wg.getAttribute("data-wid");
+    if (ev.shiftKey) S.selW = S.selW.includes(id) ? S.selW.filter(x => x !== id) : S.selW.concat(id);
+    else { S.selW = [id]; S.sel = []; }
+    render(); return;
+  }
+  const nid = hitNode(t);
+  if (nid) {
+    if (S.mode === "connect") {
+      const n = getNode(nid), p = pinCercano(n, w);
+      drag = { kind: "connect", fromId: nid, fromPin: p, start: pinPoint(n, p), cur: w };
+      render(); return;
+    }
+    if (ev.shiftKey) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
+    else if (!S.sel.includes(nid)) { S.sel = [nid]; S.selW = []; }
+    drag = { kind: "move", w0: w, orig: S.sel.map(id => { const n = getNode(id); return { id, x: n.x, y: n.y }; }), moved: false, nid };
+    render(); return;
+  }
+  if (!ev.shiftKey) { S.sel = []; S.selW = []; }
+  drag = { kind: "band", band: { x1: w.x, y1: w.y, x2: w.x, y2: w.y }, add: ev.shiftKey };
+  render();
+});
+svg.addEventListener("pointermove", ev => {
+  const w = toWorld(ev);
+  if (!drag) {
+    const nid = hitNode(ev.target);
+    if (nid !== hoverNode) { hoverNode = nid; render(); }
+    return;
+  }
+  if (drag.kind === "pan") { S.pan.x = drag.px + (ev.clientX - drag.sx); S.pan.y = drag.py + (ev.clientY - drag.sy); render(); return; }
+  if (drag.kind === "move") {
+    const dx = w.x - drag.w0.x, dy = w.y - drag.w0.y;
+    if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+    for (const o of drag.orig) { const n = getNode(o.id); if (n) { n.x = snapV(o.x + dx); n.y = snapV(o.y + dy); } }
+    render(); return;
+  }
+  if (drag.kind === "connect") { drag.cur = w; render(); return; }
+  if (drag.kind === "band") { drag.band.x2 = w.x; drag.band.y2 = w.y; render(); return; }
+});
+svg.addEventListener("pointerup", ev => {
+  const w = toWorld(ev);
+  if (!drag) return;
+  if (drag.kind === "connect") {
+    const t = document.elementFromPoint(ev.clientX, ev.clientY);
+    let id = null, pin = null;
+    if (t && t.classList && t.classList.contains("pin")) {
+      id = t.getAttribute("data-pid");
+      pin = t.getAttribute("data-pin") === "o" ? "o" : +t.getAttribute("data-pin");
+    } else {
+      const nid = t ? hitNode(t) : null;
+      if (nid) { id = nid; pin = pinCercano(getNode(nid), w); }
+    }
+    if (id && id !== drag.fromId) conectar(drag.fromId, drag.fromPin, id, pin);
+  } else if (drag.kind === "band") {
+    const b = drag.band;
+    const R = { l: Math.min(b.x1, b.x2), r: Math.max(b.x1, b.x2), t: Math.min(b.y1, b.y2), b: Math.max(b.y1, b.y2) };
+    const dentro = S.nodes.filter(n => { const q = rectOf(n); return q.l >= R.l && q.r <= R.r && q.t >= R.t && q.b <= R.b; }).map(n => n.id);
+    S.sel = drag.add ? Array.from(new Set(S.sel.concat(dentro))) : dentro;
+    if (Math.abs(b.x2 - b.x1) < 3 && Math.abs(b.y2 - b.y1) < 3 && pendiente) {
+      const n = makeNode(pendiente, snapV(w.x), snapV(w.y));
+      S.nodes.push(n); S.sel = [n.id]; S.selW = []; setPendiente(null); commit();
+    }
+  } else if (drag.kind === "move") {
+    if (drag.moved) commit();
+    else {                                   // clic seco sobre un interruptor: lo cambia
+      const n = getNode(drag.nid);
+      if (n && n.type === "in") { n.on = !n.on; commit(); }
+    }
+  }
+  svg.classList.remove("panning");
+  drag = null; render();
+});
+function conectar(fromId, fromPin, toId, toPin) {
+  let a = { id: fromId, pin: fromPin }, b = { id: toId, pin: toPin };
+  if (a.pin !== "o" && b.pin === "o") { const c = a; a = b; b = c; }   // se cableó al revés
+  if (a.pin !== "o" || b.pin === "o") { toast("Un cable va de una salida a una entrada"); return; }
+  S.wires = S.wires.filter(w => !(w.to.id === b.id && w.to.pin === b.pin));  // una entrada, un cable
+  S.wires.push({ id: uid("w"), from: { id: a.id }, to: { id: b.id, pin: b.pin }, variant: 0 });
+  commit();
+}
+svg.addEventListener("dblclick", ev => {
+  const nid = hitNode(ev.target);
+  if (!nid) return;
+  S.sel = [nid]; S.selW = []; render();
+  const i = document.getElementById("n-label"); if (i) { i.focus(); i.select(); }
+});
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  if (ev.shiftKey) { S.pan.x -= ev.deltaY; render(); return; }
+  const r = svg.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+  const wx = (mx - S.pan.x) / S.zoom, wy = (my - S.pan.y) / S.zoom;
+  S.zoom = Math.min(4, Math.max(.2, S.zoom * Math.exp(-ev.deltaY * .0016)));
+  S.pan.x = mx - wx * S.zoom; S.pan.y = my - wy * S.zoom;
+  render();
+}, { passive: false });
+
+/* ======================= paleta ======================= */
+const PALETA = [
+  ["and", "1"], ["or", "2"], ["not", "3"], ["nand", "4"], ["nor", "5"], ["xor", "6"], ["xnor", "7"],
+  "sep", ["in", "I"], ["out", "O"], ["buf", "B"], ["label", "L"]
+];
+function iconoDe(type) {
+  const w = 26, h = 17, bub = T[type].bubble ? 3.2 : 0;
+  if (type === "in") return `<rect class="glyph-body" x="4" y="4" width="24" height="15" rx="7.5"/><circle cx="20" cy="11.5" r="4" fill="currentColor"/><path class="glyph-wire" d="M28 11.5h8"/>`;
+  if (type === "out") return `<path class="glyph-wire" d="M2 11.5h8"/><circle class="glyph-body" cx="20" cy="11.5" r="9"/>`;
+  if (type === "label") return `<path class="glyph-wire" d="M9 6h18M18 6v12"/>`;
+  const extra = (type === "xor" || type === "xnor")
+    ? `<path class="glyph-wire" d="M${8 - 3} ${11.5 - h / 2} Q ${8 - 3 + w * .30} 11.5 ${8 - 3} ${11.5 + h / 2}"/>` : "";
+  const ins = type === "not" || type === "buf" ? [11.5] : [11.5 - 4.5, 11.5 + 4.5];
+  const stubs = ins.map(y => `<path class="glyph-wire" d="M1 ${y}h7"/>`).join("") +
+    `<path class="glyph-wire" d="M${8 + w + bub * 2} 11.5h${6 - bub * 2}"/>`;
+  const d = shapePath(type, w, h).replace(/(-?[\d.]+) (-?[\d.]+)/g, (m, a, b) => `${(+a + 8 + w / 2).toFixed(1)} ${(+b + 11.5).toFixed(1)}`);
+  const bubble = bub ? `<circle class="glyph-body" cx="${8 + w + bub}" cy="11.5" r="${bub}"/>` : "";
+  return extra + stubs + `<path class="glyph-body" d="${d}"/>` + bubble;
+}
+(function armarPaleta() {
+  const p = $("#palette");
+  for (const it of PALETA) {
+    if (it === "sep") { const d = document.createElement("div"); d.className = "sep"; p.appendChild(d); continue; }
+    const [type, key] = it;
+    const b = document.createElement("button");
+    b.className = "ptool"; b.dataset.add = type;
+    b.innerHTML = `<svg viewBox="0 0 40 23">${iconoDe(type)}</svg><span>${T[type].nombre}</span><kbd>${key}</kbd>`;
+    b.onclick = () => setPendiente(pendiente === type ? null : type);
+    p.appendChild(b);
+  }
+})();
+function setPendiente(t) {
+  pendiente = t;
+  document.querySelectorAll(".ptool").forEach(b => b.classList.toggle("on", b.dataset.add === t));
+  $("#st-hint").textContent = t ? "Hacé clic en la hoja para colocarlo · Esc cancela" : "";
+}
+
+/* ======================= comandos ======================= */
+function borrar() {
+  const ids = new Set(S.sel);
+  S.nodes = S.nodes.filter(n => !ids.has(n.id));
+  S.wires = S.wires.filter(w => !ids.has(w.from.id) && !ids.has(w.to.id) && !S.selW.includes(w.id));
+  S.sel = []; S.selW = [];
+}
+function duplicar() {
+  const map = {};
+  const copias = S.sel.map(getNode).filter(Boolean).map(n => {
+    const c = JSON.parse(JSON.stringify(n));
+    c.id = uid("n"); c.x += S.grid * 2; c.y += S.grid * 2; map[n.id] = c.id;
+    if (c.type === "in") c.label = proximaLetra();
+    return c;
+  });
+  const wc = S.wires.filter(w => map[w.from.id] && map[w.to.id]).map(w => ({
+    id: uid("w"), from: { id: map[w.from.id] }, to: { id: map[w.to.id], pin: w.to.pin }, variant: 0 }));
+  S.nodes.push(...copias); S.wires.push(...wc);
+  S.sel = copias.map(c => c.id); S.selW = [];
+}
+function align(kind) {
+  const ns = S.sel.map(getNode).filter(Boolean);
+  if (ns.length < 2) { toast("Elegí al menos dos elementos"); return; }
+  const rs = ns.map(rectOf);
+  if (kind === "left") { const v = Math.min(...rs.map(r => r.l)); ns.forEach((n, i) => n.x += v - rs[i].l); }
+  if (kind === "cx") { const v = ns.reduce((a, n) => a + n.x, 0) / ns.length; ns.forEach(n => n.x = snapV(v)); }
+  if (kind === "cy") { const v = ns.reduce((a, n) => a + n.y, 0) / ns.length; ns.forEach(n => n.y = snapV(v)); }
+  if (kind === "dv") {
+    const s = ns.slice().sort((a, b) => a.y - b.y), step = (s[s.length - 1].y - s[0].y) / (s.length - 1);
+    s.forEach((n, i) => n.y = snapV(s[0].y + step * i));
+  }
+  if (kind === "dh") {
+    const s = ns.slice().sort((a, b) => a.x - b.x), step = (s[s.length - 1].x - s[0].x) / (s.length - 1);
+    s.forEach((n, i) => n.x = snapV(s[0].x + step * i));
+  }
+  S.wires.forEach(w => w.variant = 0);
+  commit(); render();
+}
+function fit() {
+  if (!S.nodes.length) { S.zoom = 1; S.pan = { x: 80, y: 60 }; render(); return; }
+  const b = bboxAll(), r = svg.getBoundingClientRect(), m = 70;
+  S.zoom = Math.max(.2, Math.min((r.width - m * 2) / Math.max(1, b.r - b.l), (r.height - m * 2) / Math.max(1, b.b - b.t), 1.8));
+  S.pan.x = (r.width - (b.r - b.l) * S.zoom) / 2 - b.l * S.zoom;
+  S.pan.y = (r.height - (b.b - b.t) * S.zoom) / 2 - b.t * S.zoom;
+  render();
+}
+function toast(m) {
+  const t = $("#toast"); t.textContent = m; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1900);
+}
+
+/* ======================= tabla de verdad ======================= */
+function mostrarTabla() {
+  const tt = truthTable();
+  const body = $("#tt-body"), sub = $("#tt-sub");
+  $("#ov-truth").classList.add("show");
+  if (!tt) { sub.textContent = ""; body.innerHTML = `<div class="hint">Necesitás al menos un interruptor de entrada y una salida.</div>`; return; }
+  if (tt.demasiadas) { sub.textContent = ""; body.innerHTML = `<div class="hint">${tt.demasiadas} entradas dan ${1 << tt.demasiadas} filas: demasiado para mostrar.</div>`; return; }
+  const nombres = tt.ins.map(n => n.label);
+  const actual = tt.ins.reduce((a, n, i) => a | ((n.on ? 1 : 0) << (tt.ins.length - 1 - i)), 0);
+  sub.textContent = `${tt.ins.length} entradas · ${tt.outs.length} ${tt.outs.length === 1 ? "salida" : "salidas"} · la fila resaltada es el estado actual del circuito`;
+  let h = "";
+  tt.outs.forEach((o, i) => {
+    const mts = tt.rows.filter(r => r.out[i]).map(r => r.m);
+    const expr = simplify(mts, tt.ins.length).replace(/([A-Z])'/g, "$1&#8242;");
+    h += `<div class="expr"><b>${esc(o.label)}</b> = ${expr || "0"} &nbsp;&nbsp;<span style="color:#93a0ae">Σm(${mts.join(",") || "—"})</span></div>`;
+  });
+  h += `<table style="margin-top:12px"><thead><tr>` +
+    nombres.map(n => `<th>${esc(n)}</th>`).join("") +
+    tt.outs.map((o, i) => `<th class="${i === 0 ? "sep" : ""}">${esc(o.label)}</th>`).join("") +
+    `</tr></thead><tbody>` +
+    tt.rows.map(r => `<tr class="${r.m === actual ? "now" : ""}">` +
+      r.in.map(v => `<td class="${v ? "v1" : ""}">${v}</td>`).join("") +
+      r.out.map((v, i) => `<td class="${v ? "v1" : ""} ${i === 0 ? "sep" : ""}">${r.osc ? "?" : v}</td>`).join("") +
+      `</tr>`).join("") + `</tbody></table>`;
+  // reemplazo los nombres A,B,C… por las etiquetas reales en las expresiones
+  body.innerHTML = h.replace(/([A-Z])(&#8242;)?(?=[\s+<])/g, (m, L, p) => {
+    const i = L.charCodeAt(0) - 65;
+    return (nombres[i] && nombres.length > i ? nombres[i] : L) + (p || "");
+  });
+}
+
+/* ======================= exportar ======================= */
+function buildExportSVG() {
+  const b = bboxAll(), m = 28;
+  const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
+  const s = document.createElementNS(NS, "svg");
+  s.setAttribute("xmlns", NS); s.setAttribute("width", W); s.setAttribute("height", H);
+  s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
+  const st = document.createElementNS(NS, "style");
+  st.textContent = `.g-body{fill:#fff;stroke:#101418;stroke-width:1.7;stroke-linejoin:round}
+    .g-stub{stroke:#101418;stroke-width:1.5;fill:none}
+    .g-label{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central}
+    .wire{fill:none;stroke:#9aa5ae;stroke-width:1.8;stroke-linejoin:round}
+    .wire.hi{stroke:#12a150;stroke-width:2.2}.dot{fill:#9aa5ae}.dot.hi{fill:#12a150}
+    .led-off{fill:#eef1f4;stroke:#101418;stroke-width:1.7}.led-on{fill:#12a150;stroke:#0b7a3c;stroke-width:1.7}
+    .sw-track{fill:#eef1f4;stroke:#101418;stroke-width:1.7}.sw-track.on{fill:#e4f6ec}
+    .sw-knob{fill:#fff;stroke:#101418;stroke-width:1.7}.sw-knob.on{fill:#12a150;stroke:#0b7a3c}`;
+  s.appendChild(st);
+  const bg = document.createElementNS(NS, "rect");
+  bg.setAttribute("x", b.l - m); bg.setAttribute("y", b.t - m);
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#fff");
+  s.appendChild(bg);
+  const sn = S.sel, sw = S.selW; S.sel = []; S.selW = []; render();
+  const gw = gWires.cloneNode(true), gn = gNodes.cloneNode(true);
+  gw.querySelectorAll(".wire-hit").forEach(x => x.remove());
+  s.appendChild(gw); s.appendChild(gn);
+  S.sel = sn; S.selW = sw; render();
+  return { svg: s, W, H };
+}
+function download(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+$("#b-svg").onclick = () => {
+  if (!S.nodes.length) return toast("El circuito está vacío");
+  download("circuito.svg", new Blob([new XMLSerializer().serializeToString(buildExportSVG().svg)], { type: "image/svg+xml" }));
+  toast("SVG descargado");
+};
+$("#b-png").onclick = () => {
+  if (!S.nodes.length) return toast("El circuito está vacío");
+  const { svg: s, W, H } = buildExportSVG();
+  const img = new Image();
+  img.onload = () => {
+    const sc = 3, c = document.createElement("canvas");
+    c.width = W * sc; c.height = H * sc;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(bl => { download("circuito.png", bl); toast("PNG descargado (3×)"); });
+  };
+  img.onerror = () => toast("No se pudo generar el PNG");
+  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s))));
+};
+$("#b-save").onclick = () => {
+  download("circuito.json", new Blob([JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to })) }, null, 1)], { type: "application/json" }));
+  toast("Circuito guardado");
+};
+$("#b-open").onclick = () => { $("#io-text").value = ""; $("#ov-io").classList.add("show"); $("#io-text").focus(); };
+$("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
+$("#io-ok").onclick = () => {
+  try {
+    const d = JSON.parse($("#io-text").value);
+    S.nodes = d.nodes || []; S.wires = (d.wires || []).map(w => Object.assign({ variant: 0 }, w));
+    uidc = S.nodes.length + S.wires.length + 100;
+    S.sel = []; S.selW = []; VAL = new Map(); commit(); fit();
+    $("#ov-io").classList.remove("show"); toast("Circuito cargado");
+  } catch (e) { toast("Ese JSON no se pudo leer"); }
+};
+
+/* ======================= barra ======================= */
+function setMode(m) {
+  S.mode = m;
+  $("#m-select").classList.toggle("on", m === "select");
+  $("#m-connect").classList.toggle("on", m === "connect");
+  svg.classList.toggle("mode-connect", m === "connect");
+  $("#st-hint").textContent = m === "connect" ? "Arrastrá de una salida a una entrada" : "";
+  render();
+}
+$("#m-select").onclick = () => setMode("select");
+$("#m-connect").onclick = () => setMode("connect");
+$("#b-undo").onclick = undo; $("#b-redo").onclick = redo;
+$("#b-del").onclick = () => { borrar(); commit(); render(); };
+$("#b-dup").onclick = () => { duplicar(); commit(); render(); };
+document.querySelectorAll("[data-align]").forEach(b => b.onclick = () => align(b.dataset.align));
+$("#b-snap").onclick = () => { S.snap = !S.snap; $("#b-snap").classList.toggle("on", S.snap); };
+$("#b-gridshow").onclick = () => { S.showGrid = !S.showGrid; render(); };
+$("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
+$("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
+$("#b-fit").onclick = fit;
+$("#b-truth").onclick = mostrarTabla;
+$("#b-help").onclick = () => $("#ov-help").classList.add("show");
+$("#b-clear").onclick = () => {
+  if (!S.nodes.length || confirm("¿Vaciar el circuito?")) { S.nodes = []; S.wires = []; S.sel = []; S.selW = []; VAL = new Map(); commit(); render(); }
+};
+$("#ejemplos").onchange = e => { if (e.target.value) { cargarEjemplo(e.target.value); e.target.value = ""; } };
+document.querySelectorAll(".overlay").forEach(o => o.addEventListener("click", e => { if (e.target === o) o.classList.remove("show"); }));
+
+/* ======================= teclado ======================= */
+const ATAJOS = { "1": "and", "2": "or", "3": "not", "4": "nand", "5": "nor", "6": "xor", "7": "xnor",
+  "i": "in", "o": "out", "b": "buf", "l": "label" };
+window.addEventListener("keydown", ev => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
+  const k = ev.key.toLowerCase();
+  if (ev.code === "Space") { spaceDown = true; ev.preventDefault(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "y") { ev.preventDefault(); redo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "d") { ev.preventDefault(); duplicar(); commit(); render(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "a") { ev.preventDefault(); S.sel = S.nodes.map(n => n.id); render(); return; }
+  if (ev.ctrlKey || ev.metaKey) return;
+  if (k === "delete" || k === "backspace") { ev.preventDefault(); borrar(); commit(); render(); return; }
+  if (k === "escape") { setPendiente(null); S.sel = []; S.selW = []; document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show")); render(); return; }
+  if (k === "v") return setMode("select");
+  if (k === "c") return setMode("connect");
+  if (k === "t") return mostrarTabla();
+  if (k === "f") return fit();
+  if (ATAJOS[k]) return setPendiente(ATAJOS[k]);
+  if (ev.key.startsWith("Arrow") && S.sel.length) {
+    ev.preventDefault();
+    const d = ev.shiftKey ? 1 : S.grid;
+    const dx = ev.key === "ArrowLeft" ? -d : ev.key === "ArrowRight" ? d : 0;
+    const dy = ev.key === "ArrowUp" ? -d : ev.key === "ArrowDown" ? d : 0;
+    S.sel.map(getNode).forEach(n => { if (n) { n.x += dx; n.y += dy; } });
+    render(); clearTimeout(window._kt); window._kt = setTimeout(commit, 400);
+  }
+});
+window.addEventListener("keyup", ev => { if (ev.code === "Space") spaceDown = false; });
+
+/* ======================= ejemplos ======================= */
+function cargarEjemplo(cual) {
+  S.nodes = []; S.wires = []; S.sel = []; S.selW = []; VAL = new Map(); uidc = 1;
+  const K = {};
+  const add = (k, type, x, y, ex) => { const n = makeNode(type, x, y, ex); K[k] = n.id; S.nodes.push(n); return n; };
+  const cab = (a, b, pin) => S.wires.push({ id: uid("w"), from: { id: K[a] }, to: { id: K[b], pin: pin || 0 }, variant: 0 });
+  if (cual === "half") {
+    add("A", "in", 80, 140, { label: "A" }); add("B", "in", 80, 260, { label: "B" });
+    add("X", "xor", 280, 160); add("Y", "and", 280, 280);
+    add("S", "out", 440, 160, { label: "S" }); add("C", "out", 440, 280, { label: "Cout" });
+    cab("A", "X", 0); cab("B", "X", 1); cab("A", "Y", 0); cab("B", "Y", 1); cab("X", "S"); cab("Y", "C");
+  } else if (cual === "full") {
+    add("A", "in", 60, 100, { label: "A" }); add("B", "in", 60, 200, { label: "B" }); add("Ci", "in", 60, 320, { label: "Cin" });
+    add("X1", "xor", 240, 140); add("X2", "xor", 440, 200);
+    add("A1", "and", 440, 340); add("A2", "and", 240, 440); add("O1", "or", 640, 380);
+    add("S", "out", 620, 200, { label: "S" }); add("Co", "out", 800, 380, { label: "Cout" });
+    cab("A", "X1", 0); cab("B", "X1", 1); cab("X1", "X2", 0); cab("Ci", "X2", 1);
+    cab("X1", "A1", 0); cab("Ci", "A1", 1); cab("A", "A2", 0); cab("B", "A2", 1);
+    cab("A1", "O1", 0); cab("A2", "O1", 1); cab("X2", "S"); cab("O1", "Co");
+  } else if (cual === "latch") {
+    add("R", "in", 80, 120, { label: "R" }); add("S", "in", 80, 340, { label: "S" });
+    add("N1", "nor", 300, 160); add("N2", "nor", 300, 300);
+    add("Q", "out", 500, 160, { label: "Q" }); add("Qn", "out", 500, 300, { label: "Q'" });
+    cab("R", "N1", 0); cab("N2", "N1", 1); cab("N1", "N2", 0); cab("S", "N2", 1);
+    cab("N1", "Q"); cab("N2", "Qn");
+    add("t", "label", 300, 60, { label: "Latch SR: prendé S y apagalo, Q se queda en 1" });
+  } else if (cual === "mux") {
+    add("A", "in", 60, 100, { label: "D0" }); add("B", "in", 60, 200, { label: "D1" }); add("Sel", "in", 60, 340, { label: "Sel" });
+    add("N", "not", 220, 340); add("A1", "and", 400, 120); add("A2", "and", 400, 260);
+    add("O", "or", 580, 190); add("Y", "out", 740, 190, { label: "Y" });
+    cab("Sel", "N", 0); cab("A", "A1", 0); cab("N", "A1", 1);
+    cab("B", "A2", 0); cab("Sel", "A2", 1); cab("A1", "O", 0); cab("A2", "O", 1); cab("O", "Y");
+  }
+  commit(); fit();
+}
+
+/* ======================= arranque ======================= */
+cargarEjemplo("full");
+setMode("select");
+lastSnap = snapshot();
+window.addEventListener("resize", render);
+</script>
+</body>
+</html>
