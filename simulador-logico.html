@@ -321,6 +321,7 @@ textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1
     <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td>AND, OR, NOT, NAND, NOR, XOR, XNOR</td></tr>
     <tr><td><kbd>I</kbd> / <kbd>O</kbd> / <kbd>L</kbd> / <kbd>P</kbd></td><td>Entrada, salida, texto, pulso de reloj</td></tr>
     <tr><td><kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd></td><td>Biestable RS, JK, D</td></tr>
+    <tr><td><kbd>H</kbd> / <kbd>S</kbd></td><td>Semisumador y sumador completo. Son bloques cerrados, dibujados como en los esquemas en cascada: los bits entran por abajo, el acarreo anterior por la derecha, la suma sale para arriba y el acarreo R por la izquierda</td></tr>
     <tr><td>Biestables</td><td>Cambian de estado en el flanco de subida del reloj. Seleccioná uno y en el panel derecho tenés su tabla de verdad y su tabla de excitación; en el Custom las dos son editables</td></tr>
     <tr><td><kbd>T</kbd></td><td>Tabla de verdad con la expresión simplificada</td></tr>
     <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
@@ -365,7 +366,9 @@ const T = {
   out:  { w: 30, h: 30, pins: 1, nombre: "Salida" },
   label:{ w: 60, h: 20, pins: 0, nombre: "Texto" },
   clk:  { w: 52, h: 32, pins: 0, nombre: "Señal de reloj" },
-  ff:   { w: 104, h: 76, pins: 0, nombre: "Biestable" }
+  ff:   { w: 104, h: 76, pins: 0, nombre: "Biestable" },
+  hadd: { w: 100, h: 66, pins: 2, nombre: "Semisumador" },
+  fadd: { w: 100, h: 66, pins: 3, nombre: "Sumador completo" }
 };
 /* Biestables: cada uno define sus patas y su tabla característica.
    La tabla es un array de 2^(datos+1) posiciones: índice = (bits de datos << 1) | Q,
@@ -384,6 +387,40 @@ const BIESTABLES = {
   custom: { nombre: "Custom", pins: [{ n: "X" }, { n: "CLK", clk: true }], f: null,
         nota: "Editá la tabla y el circuito la respeta" }
 };
+/* Sumadores: bloques cerrados que se dibujan como en los esquemas de sumador en
+   cascada. Los bits a sumar entran por abajo, el acarreo anterior entra por la
+   derecha, el acarreo que se propaga sale por la izquierda y la suma sale para
+   arriba: encadenando bloques, la R de uno cae en la Rant del que tiene al lado. */
+const SUMADORES = {
+  hadd: { corto: "½ Σ",
+          ins:  [{ n: "A", lado: "abajo" }, { n: "B", lado: "abajo" }],
+          outs: [{ n: "S", lado: "arriba" }, { n: "R", lado: "izq" }],
+          nota: "Suma dos bits: S = A ⊕ B y el acarreo R = A · B. No recibe acarreo anterior, por eso es medio sumador: sirve para la primera columna." },
+  fadd: { corto: "Σ",
+          ins:  [{ n: "A", lado: "abajo" }, { n: "B", lado: "abajo" }, { n: "Rant", lado: "der" }],
+          outs: [{ n: "S", lado: "arriba" }, { n: "R", lado: "izq" }],
+          nota: "Suma tres bits: A, B y el acarreo anterior Rant. La R que sale por la izquierda es el acarreo de esta columna: va a la Rant del bloque de la izquierda." }
+};
+const esSum = (n) => n.type === "hadd" || n.type === "fadd";
+const LADOS = { izq: { x: -1, y: 0 }, der: { x: 1, y: 0 },
+                arriba: { x: 0, y: -1 }, abajo: { x: 0, y: 1 } };
+/* Dónde apoya cada pata del sumador: se reparten a lo largo del lado que les toca,
+   una sola al medio y dos a un tercio y dos tercios. */
+function sumPata(n, pin) {
+  const d = SUMADORES[n.type];
+  const p = esSalida(pin) ? d.outs[idxSalida(pin)] : d.ins[pin];
+  const dir = LADOS[p.lado], w = bodyW(n) / 2, h = T[n.type].h / 2;
+  const mismos = d.ins.concat(d.outs).filter(q => q.lado === p.lado);
+  const t = (mismos.indexOf(p) + 1) / (mismos.length + 1);
+  const base = dir.x !== 0 ? { x: dir.x * w, y: -h + 2 * h * t }
+                           : { x: -w + 2 * w * t, y: dir.y * h };
+  return { p, dir, base, punta: { x: base.x + dir.x * STUB, y: base.y + dir.y * STUB } };
+}
+function sumaDe(type, v) {                      // bits de entrada -> [S, R]
+  const unos = v.reduce((a, b) => a + (b === 1 ? 1 : 0), 0);
+  return type === "hadd" ? [unos === 1 ? 1 : 0, unos === 2 ? 1 : 0]
+                         : [unos & 1, unos >= 2 ? 1 : 0];
+}
 function pinsDe(kind, conClk) {
   const base = JSON.parse(JSON.stringify(BIESTABLES[kind].pins));
   return conClk ? base : base.filter(p => !p.clk);
@@ -439,10 +476,11 @@ const bodyW = (n) => T[n.type].w;
 const FF_CAB = 24, FF_FILA = 26;              // alto del encabezado y de cada fila
 const bodyH = (n) => n.type === "label" ? T.label.h
   : n.type === "ff" ? FF_CAB + Math.max(2, nIn(n)) * FF_FILA
+  : esSum(n) ? T[n.type].h
   : Math.max(T[n.type].h, (nIn(n) > 2 ? nIn(n) * 17 + 12 : T[n.type].h));
 const nIn = (n) => n.type === "ff" ? n.pins.length
   : n.type === "out" ? 1 : (T[n.type].var ? (n.pins || 2) : T[n.type].pins);
-const nOut = (n) => n.type === "ff" ? 2 : (n.type === "out" || n.type === "label" ? 0 : 1);
+const nOut = (n) => (n.type === "ff" || esSum(n)) ? 2 : (n.type === "out" || n.type === "label" ? 0 : 1);
 const esSalida = (pin) => typeof pin === "string" && pin[0] === "o";
 const idxSalida = (pin) => pin === "o" ? 0 : +String(pin).slice(1);
 const claveSal = (id, i) => id + "#" + i;
@@ -494,6 +532,11 @@ function proximaLetra() {
 /* ======================= geometría ======================= */
 function rectOf(n) {
   const w = bodyW(n), h = bodyH(n);
+  if (esSum(n)) {                       // tiene patas en los cuatro lados
+    const m = STUB;
+    return { l: n.x - w / 2 - m, r: n.x + w / 2 + m, t: n.y - h / 2 - m, b: n.y + h / 2 + m,
+             w: w + 2 * m, h: h + 2 * m, cx: n.x, cy: n.y };
+  }
   const l = -w / 2 - (nIn(n) ? STUB : 0), r = w / 2 + bubR(n) * 2 + (n.type === "label" ? 0 : STUB);
   const rot = ROT(n);
   const esq = [{ x: l, y: -h / 2 }, { x: r, y: -h / 2 }, { x: r, y: h / 2 }, { x: l, y: h / 2 }]
@@ -514,6 +557,7 @@ function girar(p, rot) {
 }
 /* posición de la pata respecto del centro, sin rotar */
 function pinLocal(n, pin) {
+  if (esSum(n)) return sumPata(n, pin).punta;      // cada pata sale por su propio lado
   const h = bodyH(n);
   if (esSalida(pin)) {
     const k = nOut(n), i = idxSalida(pin);
@@ -532,7 +576,7 @@ function pinPoint(n, pin) {
   return { x: n.x + Math.round(p.x * 2) / 2, y: n.y + Math.round(p.y * 2) / 2 };
 }
 function pinDir(n, pin) {
-  const d = esSalida(pin) ? { x: 1, y: 0 } : { x: -1, y: 0 };
+  const d = esSum(n) ? sumPata(n, pin).dir : esSalida(pin) ? { x: 1, y: 0 } : { x: -1, y: 0 };
   return girar(d, ROT(n));
 }
 const puedeGirar = (n) => /^(and|or|xor|nand|nor|xnor|not|buf)$/.test(n.type);
@@ -742,7 +786,8 @@ function simulate(nodes, wires, prev) {
   for (const n of nodes) {
     if (n.type === "in" || n.type === "clk") val.set(claveSal(n.id, 0), n.on ? 1 : 0);
     else if (n.type === "ff") { val.set(claveSal(n.id, 0), n.q ? 1 : 0); val.set(claveSal(n.id, 1), n.q ? 0 : 1); }
-    else val.set(claveSal(n.id, 0), (prev && prev.get(claveSal(n.id, 0))) || 0);
+    else for (let i = 0; i < Math.max(1, nOut(n)); i++)
+      val.set(claveSal(n.id, i), (prev && prev.get(claveSal(n.id, i))) || 0);
   }
   const comb = nodes.filter(n => !/^(in|clk|ff|label)$/.test(n.type));
   const asincronos = nodes.filter(n => n.type === "ff" && n.conClk === false);
@@ -752,8 +797,9 @@ function simulate(nodes, wires, prev) {
       for (const n of comb) {
         const v = [];
         for (let i = 0; i < nIn(n); i++) v.push(entrada(n, i));
-        const r = evalGate(n.type, v);
-        if (r !== leer(n.id, 0)) { val.set(claveSal(n.id, 0), r); cambio = true; }
+        const r = esSum(n) ? sumaDe(n.type, v) : [evalGate(n.type, v)];
+        for (let i = 0; i < r.length; i++)
+          if (r[i] !== leer(n.id, i)) { val.set(claveSal(n.id, i), r[i]); cambio = true; }
       }
       for (const n of asincronos) {          // sin reloj: siguen a sus entradas, como un latch
         const datos = datosDe(n).map(i => entrada(n, i));
@@ -965,6 +1011,23 @@ function renderNode(n) {
           x2: der - 10, y2: y - 8.5, stroke: enc ? "#0b7a3c" : "#101418" }, g);
       }
     }
+  } else if (esSum(n)) {
+    const w = bodyW(n), h = bodyH(n);
+    el("rect", { class: "g-body", x: -w / 2, y: -h / 2, width: w, height: h, rx: 3 }, g);
+    el("text", { class: "g-label", x: 0, y: 0, "font-size": 15 }, g).textContent = SUMADORES[n.type].corto;
+    if (n.label) el("text", { class: "g-label", x: -w / 2, y: -h / 2 - 12, "font-size": 12,
+      style: "text-anchor:start" }, g).textContent = n.label;
+    // una patita por lado, con el rótulo apoyado adentro contra su borde
+    const claves = Array.from({ length: nIn(n) }, (_, i) => i).concat(["o0", "o1"]);
+    for (const clave of claves) {
+      const q = sumPata(n, clave), enc = esSalida(clave) && valorDe(n.id, idxSalida(clave));
+      el("line", { class: "g-stub", x1: q.base.x, y1: q.base.y, x2: q.punta.x, y2: q.punta.y }, g);
+      // el rótulo va en style y no en atributos: la clase .g-label le gana a los atributos
+      const alineado = q.dir.x === 0 ? "middle" : q.dir.x < 0 ? "start" : "end";
+      el("text", { class: "g-label", x: q.base.x - q.dir.x * 8, y: q.base.y - q.dir.y * 10,
+        "font-size": 11, style: `text-anchor:${alineado};fill:${enc ? "#0b7a3c" : "#101418"}` }, g)
+        .textContent = q.p.n;
+    }
   } else if (n.type === "label") {
     el("text", { class: "g-label", x: 0, y: 0, "font-size": n.font || 14 }, g).textContent = n.label;
     el("rect", { x: -T.label.w / 2, y: -T.label.h / 2, width: T.label.w, height: T.label.h, fill: "transparent" }, g);
@@ -1100,6 +1163,7 @@ function renderInspector() {
     h += `<div class="iconbar" style="margin-top:10px">
       <button class="btn" id="n-dup">Duplicar</button><button class="btn" id="n-del">Borrar</button></div></div>`;
     if (n.type === "ff") h += panelBiestable(n);
+    if (esSum(n)) h += panelSumador(n);
   }
   // panel de control siempre visible
   const ins = S.nodes.filter(n => n.type === "in"), outs = S.nodes.filter(n => n.type === "out");
@@ -1167,6 +1231,21 @@ function panelBiestable(n) {
   h += `</tbody></table><div class="hint" style="margin-top:8px">
     ${custom ? "Tocá una celda para ciclar 0 → 1 → X. Al editarla se actualiza la tabla de verdad, porque son la misma información leída al revés."
              : "Qué hay que poner en las entradas para lograr cada transición. X = indistinto."}</div></div>`;
+  return h;
+}
+function panelSumador(n) {
+  const d = SUMADORES[n.type], k = d.ins.length;
+  let h = `<div class="sec"><h3>Tabla de verdad</h3><table class="tt"><thead><tr>` +
+    d.ins.map(x => `<th>${esc(x.n)}</th>`).join("") +
+    d.outs.map((x, i) => `<th${i === 0 ? ' class="sep"' : ""}>${esc(x.n)}</th>`).join("") +
+    `</tr></thead><tbody>`;
+  for (let c = 0; c < (1 << k); c++) {
+    const bits = Array.from({ length: k }, (_, i) => (c >> (k - 1 - i)) & 1);
+    h += `<tr>` + bits.map(b => `<td>${b}</td>`).join("") +
+      sumaDe(n.type, bits).map((v, i) =>
+        `<td class="${i === 0 ? "sep " : ""}${v ? "v1" : ""}">${v}</td>`).join("") + `</tr>`;
+  }
+  h += `</tbody></table><div class="hint" style="margin-top:8px">${d.nota}</div></div>`;
   return h;
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
@@ -1477,6 +1556,8 @@ const GRUPOS = [
   { nombre: "Circuitos lógicos", abierto: true, items: [
     ["and", "1"], ["or", "2"], ["not", "3"], ["nand", "4"], ["nor", "5"], ["xor", "6"], ["xnor", "7"],
     ["buf", "B"], ["in", "I"], ["out", "O"], ["label", "L"] ] },
+  { nombre: "Sumadores", abierto: false, items: [
+    ["hadd", "H"], ["fadd", "S"] ] },
   { nombre: "Biestables · sin clock", abierto: false, items: [
     ["ff:rs-sin", ""], ["ff:jk-sin", ""], ["ff:d-sin", ""], ["ff:t-sin", ""], ["ff:custom-sin", ""] ] },
   { nombre: "Biestables · con clock", abierto: false, items: [
@@ -1491,6 +1572,12 @@ function iconoDe(type) {
     return `<path class="glyph-wire" d="M1 7h6M1 16h6M33 7h6M33 16h6"/>` +
       `<rect class="glyph-body" x="7" y="2" width="26" height="19"/>` + disparo +
       `<text x="20" y="9" font-size="8.5" font-family="Arial" text-anchor="middle" dominant-baseline="central" fill="currentColor" stroke="none">${BIESTABLES[k].nombre}</text>`;
+  }
+  if (SUMADORES[type]) {                            // patas por los cuatro lados, como en la hoja
+    const der = type === "fadd" ? "M30 11.5h5" : "";
+    return `<path class="glyph-wire" d="M20 4v-3M15 19v3M25 19v3M10 11.5h-5${der}"/>` +
+      `<rect class="glyph-body" x="10" y="4" width="20" height="15"/>` +
+      `<text x="20" y="11.8" font-size="${type === "fadd" ? 10 : 8.5}" font-family="Arial" text-anchor="middle" dominant-baseline="central" fill="currentColor" stroke="none">${SUMADORES[type].corto}</text>`;
   }
   const w = 26, h = 17, bub = T[type].bubble ? 3.2 : 0, cx = 8 + w / 2, cy = 11.5;
   if (type === "in") return `<rect class="glyph-body" x="4" y="4" width="24" height="15" rx="7.5"/><circle cx="20" cy="11.5" r="4" fill="currentColor"/><path class="glyph-wire" d="M28 11.5h8"/>`;
@@ -1756,7 +1843,7 @@ document.querySelectorAll(".overlay").forEach(o => o.addEventListener("click", e
 
 /* ======================= teclado ======================= */
 const ATAJOS = { "1": "and", "2": "or", "3": "not", "4": "nand", "5": "nor", "6": "xor", "7": "xnor",
-  "i": "in", "o": "out", "b": "buf", "l": "label", "p": "clk",
+  "i": "in", "o": "out", "b": "buf", "l": "label", "p": "clk", "h": "hadd", "s": "fadd",
   "8": "ff:rs", "9": "ff:jk", "0": "ff:d" };
 window.addEventListener("keydown", ev => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
