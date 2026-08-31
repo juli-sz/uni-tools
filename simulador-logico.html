@@ -97,12 +97,12 @@ kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line
   cursor:pointer;background:var(--line-2);flex:none;transition:background .14s}
 .sw::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;
   background:var(--paper);box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .14s}
-.sw.on{background:var(--on)}
+.sw.on{background:var(--c-activo,var(--on))}
 .sw.on::after{transform:translateX(21px)}
 .bit{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--off);width:16px;text-align:center}
-.bit.on{color:var(--on)}
+.bit.on{color:var(--c-activo,var(--on))}
 .lamp{width:14px;height:14px;border-radius:50%;background:var(--line-2);border:1.5px solid var(--line);flex:none}
-.lamp.on{background:var(--on);border-color:var(--on);box-shadow:0 0 0 3px var(--on-soft)}
+.lamp.on{background:var(--c-activo,var(--on));border-color:var(--c-activo,var(--on));box-shadow:0 0 0 3px var(--on-soft)}
 table.tt{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
 table.tt th{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#93a0ae;
   padding:4px 2px;border-bottom:1px solid var(--line);font-weight:600}
@@ -141,30 +141,43 @@ table.tt td.edit:hover{background:var(--accent-soft);color:var(--accent)}
 .help td:first-child{width:150px;white-space:nowrap}
 textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
   border-radius:8px;padding:8px;resize:vertical}
-/* dibujo */
-.g-body{fill:var(--paper);stroke:#101418;stroke-width:1.7;stroke-linejoin:round}
-.g-stub{stroke:#101418;stroke-width:1.5;fill:none}
-.g-label{font-family:var(--draw);fill:#101418;text-anchor:middle;dominant-baseline:central;
+/* dibujo
+   Los colores salen de variables CSS puestas en el <svg>. Una compuerta o un cable
+   con color propio redefine la variable en su propio <g> y sus hijos la heredan. */
+svg#canvas{
+  --c-relleno:#ffffff; --c-borde:#101418; --c-texto:#101418;
+  --c-cable:#9aa5ae; --c-activo:#12a150; --c-fondo:#ffffff;
+}
+.g-body{fill:var(--c-relleno);stroke:var(--c-borde);stroke-width:1.7;stroke-linejoin:round}
+.g-stub{stroke:var(--c-borde);stroke-width:1.5;fill:none}
+.g-label{font-family:var(--draw);fill:var(--c-texto);text-anchor:middle;dominant-baseline:central;
   pointer-events:none;user-select:none}
-.wire{fill:none;stroke:var(--off);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
-.wire.hi{stroke:var(--on);stroke-width:2.2}
+.wire{fill:none;stroke:var(--c-cable);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.wire.hi{stroke:var(--c-activo);stroke-width:2.2}
 .wire.sel{stroke:var(--accent);stroke-dasharray:6 3}
 .wire-hit{stroke:transparent;stroke-width:14;fill:none;cursor:pointer}
-.dot{fill:var(--off)}.dot.hi{fill:var(--on)}
+.dot{fill:var(--c-cable)}.dot.hi{fill:var(--c-activo)}
 .sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
 .sel .g-body{stroke:var(--accent)}
 .pin{fill:var(--paper);stroke:var(--accent);stroke-width:1.4;cursor:crosshair}
 .pin:hover{fill:var(--accent)}
-.pin.taken{stroke:var(--off)}
+.pin.taken{stroke:var(--c-cable)}
 .pin-hit{fill:transparent;stroke:none;cursor:crosshair}
 .band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
 .ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
-.led-off{fill:#eef1f4;stroke:#101418;stroke-width:1.7}
-.led-on{fill:var(--on);stroke:#0b7a3c;stroke-width:1.7}
-.sw-track{fill:#eef1f4;stroke:#101418;stroke-width:1.7}
+.led-off{fill:#eef1f4;stroke:var(--c-borde);stroke-width:1.7}
+.led-on{fill:var(--c-activo);stroke:var(--c-borde);stroke-width:1.7}
+.sw-track{fill:#eef1f4;stroke:var(--c-borde);stroke-width:1.7}
 .sw-track.on{fill:var(--on-soft)}
-.sw-knob{fill:#fff;stroke:#101418;stroke-width:1.7}
-.sw-knob.on{fill:var(--on);stroke:#0b7a3c}
+.sw-knob{fill:var(--c-relleno);stroke:var(--c-borde);stroke-width:1.7}
+.sw-knob.on{fill:var(--c-activo);stroke:var(--c-borde)}
+/* muestras de color del panel */
+.swatch{width:100%;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;
+  background:none;cursor:pointer}
+.swatch::-webkit-color-swatch-wrapper{padding:2px}
+.swatch::-webkit-color-swatch{border:none;border-radius:4px}
+.cgrid{display:grid;grid-template-columns:64px 1fr;gap:6px 8px;align-items:center}
+.cgrid label{font-size:11.5px;color:var(--ink-2)}
 
 /* ---------- Toggles de UI (Navbar y Panel) ---------- */
 #inspector {
@@ -490,8 +503,28 @@ const inX  = (n) => -bodyW(n) / 2 - STUB;
 
 let uidc = 1; const uid = (p) => p + (uidc++);
 let S = { nodes: [], wires: [], sel: [], selW: [], snap: true, grid: 20,
-  showGrid: true, zoom: 1, pan: { x: 80, y: 60 } };
+  showGrid: true, zoom: 1, pan: { x: 80, y: 60 }, tema: null };
 let VAL = new Map(), OSC = false;
+
+/* Colores del circuito. Cada compuerta o cable puede pisar los que quiera en su .color */
+const TEMA_DEF = { relleno: "#ffffff", borde: "#101418", texto: "#101418",
+                   cable: "#9aa5ae", activo: "#12a150", fondo: "#ffffff" };
+const NOMBRE_COLOR = { relleno: "Relleno", borde: "Contorno", texto: "Letras",
+                       cable: "Cables", activo: "Señal en 1", fondo: "Fondo" };
+S.tema = Object.assign({}, TEMA_DEF);
+const temaDe = (k) => (S.tema && S.tema[k]) || TEMA_DEF[k];
+/* Un color propio se aplica redefiniendo la variable CSS en el <g> del elemento:
+   todo lo que cuelga adentro la hereda sin tocar el resto del dibujo. */
+const estiloColor = (c) => !c ? "" :
+  Object.keys(c).filter(k => c[k]).map(k => `--c-${k}:${c[k]}`).join(";");
+const colorEfectivo = (o, k) => (o && o.color && o.color[k]) || temaDe(k);
+function aplicarTema() {
+  for (const k in TEMA_DEF) {
+    svg.style.setProperty("--c-" + k, temaDe(k));
+    document.documentElement.style.setProperty("--c-" + k, temaDe(k));   // el panel también sigue el color
+  }
+  $("#stage").style.background = temaDe("fondo");
+}
 
 const getNode = (id) => S.nodes.find(n => n.id === id);
 const getWire = (id) => S.wires.find(w => w.id === id);
@@ -940,32 +973,32 @@ function drawGate(g, n, cls) {
 function renderNode(n) {
   const on = valorDe(n.id, 0);
   const g = el("g", { class: "node" + (S.sel.includes(n.id) ? " sel" : ""), "data-id": n.id,
-    transform: `translate(${n.x},${n.y})` }, gNodes);
+    style: estiloColor(n.color), transform: `translate(${n.x},${n.y})` }, gNodes);
   if (n.type === "in") {
     const w = T.in.w, h = T.in.h;
     el("rect", { class: "sw-track" + (n.on ? " on" : ""), x: -w / 2, y: -h / 2, width: w, height: h, rx: h / 2 }, g);
     el("circle", { class: "sw-knob" + (n.on ? " on" : ""), cx: (n.on ? 1 : -1) * (w / 2 - h / 2), cy: 0, r: h / 2 - 4.5 }, g);
     el("text", { class: "g-label", x: 0, y: -h / 2 - 11, "font-size": 13 }, g).textContent = n.label;
     el("text", { class: "g-label", x: (n.on ? -1 : 1) * 11, y: 0, "font-size": 11,
-      fill: n.on ? "#0b7a3c" : "#7c8894" }, g).textContent = n.on ? "1" : "0";
+      style: `fill:${n.on ? "var(--c-activo)" : "var(--c-cable)"}` }, g).textContent = n.on ? "1" : "0";
     el("line", { class: "g-stub", x1: w / 2, y1: 0, x2: outX(n), y2: 0 }, g);
   } else if (n.type === "out") {
     el("circle", { class: on ? "led-on" : "led-off", cx: 0, cy: 0, r: 14 }, g);
     el("text", { class: "g-label", x: 0, y: 0, "font-size": 12,
-      fill: on ? "#ffffff" : "#7c8894" }, g).textContent = on ? "1" : "0";
+      style: `fill:${on ? "var(--c-relleno)" : "var(--c-cable)"}` }, g).textContent = on ? "1" : "0";
     el("text", { class: "g-label", x: 0, y: -25, "font-size": 13 }, g).textContent = n.label;
     el("line", { class: "g-stub", x1: -14, y1: 0, x2: inX(n), y2: 0 }, g);
   } else if (n.type === "clk") {
-    const w = T.clk.w, h = T.clk.h, tinta = n.on ? "#0b7a3c" : "#101418";
+    const w = T.clk.w, h = T.clk.h, tinta = n.on ? "var(--c-activo)" : "var(--c-borde)";
     el("rect", { class: "sw-track" + (n.on ? " on" : ""), x: -w / 2, y: -h / 2, width: w, height: h, rx: 6 }, g);
     if (n.modo === "fijo") {                       // nivel mantenido: escalón que se queda
-      el("path", { class: "g-stub", stroke: tinta,
+      el("path", { class: "g-stub", style: `stroke:${tinta}`,
         d: n.on ? `M -17 7 h 7 v -14 h 12` : `M -17 7 h 19` }, g);
-      el("text", { class: "g-label", x: 12, y: n.on ? -7 : 7, "font-size": 12, fill: tinta }, g)
+      el("text", { class: "g-label", x: 12, y: n.on ? -7 : 7, "font-size": 12, style: `fill:${tinta}` }, g)
         .textContent = n.on ? "1" : "0";
     } else {
-      el("path", { class: "g-stub", d: `M -15 6 v -6 h 7 v -8 h 7 v 8 h 7 v 6`, stroke: tinta }, g);
-      if (n.modo === "auto") el("path", { class: "g-stub", fill: tinta, stroke: "none",
+      el("path", { class: "g-stub", d: `M -15 6 v -6 h 7 v -8 h 7 v 8 h 7 v 6`, style: `stroke:${tinta}` }, g);
+      if (n.modo === "auto") el("path", { class: "g-stub", style: `fill:${tinta};stroke:none`,
         d: n.corriendo ? `M 12 -5 h 3 v 10 h -3 z M 18 -5 h 3 v 10 h -3 z` : `M 13 -6 L 21 0 L 13 6 z` }, g);
     }
     el("text", { class: "g-label", x: 0, y: -h / 2 - 11, "font-size": 13 }, g).textContent = n.label;
@@ -980,8 +1013,8 @@ function renderNode(n) {
     el("text", { class: "g-label", x: izq + 9, y: arr + FF_CAB / 2, "font-size": 11.5,
       "text-anchor": "start" }, g).textContent =
       (BIESTABLES[n.kind] ? BIESTABLES[n.kind].nombre : "FF") + " " + n.label;
-    el("circle", { cx: der - 12, cy: arr + FF_CAB / 2, r: 5,
-      fill: n.q ? "#12a150" : "#eef1f4", stroke: n.q ? "#0b7a3c" : "#c3cbd3", "stroke-width": 1.4 }, g);
+    el("circle", { cx: der - 12, cy: arr + FF_CAB / 2, r: 5, "stroke-width": 1.4,
+      style: n.q ? "fill:var(--c-activo);stroke:var(--c-borde)" : "fill:#eef1f4;stroke:#c3cbd3" }, g);
     if (n.conClk === false)
       el("text", { class: "g-label", x: 0, y: h / 2 + 11, "font-size": 9.5, fill: "#93a0ae" }, g)
         .textContent = "sin clock";
@@ -1001,14 +1034,14 @@ function renderNode(n) {
     for (let i = 0; i < 2; i++) {
       const y = pinPoint(n, "o" + i).y - n.y, enc = valorDe(n.id, i);
       el("line", { class: "g-stub", x1: der, y1: y, x2: outX(n), y2: y }, g);
-      const t = el("text", { class: "g-label", x: der - 10, y, "font-size": 12, "text-anchor": "end",
-        fill: enc ? "#0b7a3c" : "#101418" }, g);
+      const t = el("text", { class: "g-label", x: der - 10, y, "font-size": 12,
+        style: `text-anchor:end;fill:${enc ? "var(--c-activo)" : "var(--c-texto)"}` }, g);
       t.textContent = nombres[i];
       if (i === 1) {
         let an = nombres[1].length * 6.6;
         try { an = t.getComputedTextLength() || an; } catch (e) {}
         el("line", { class: "g-stub", "stroke-width": 1.1, x1: der - 10 - an, y1: y - 8.5,
-          x2: der - 10, y2: y - 8.5, stroke: enc ? "#0b7a3c" : "#101418" }, g);
+          x2: der - 10, y2: y - 8.5, style: `stroke:${enc ? "var(--c-activo)" : "var(--c-texto)"}` }, g);
       }
     }
   } else if (esSum(n)) {
@@ -1025,7 +1058,7 @@ function renderNode(n) {
       // el rótulo va en style y no en atributos: la clase .g-label le gana a los atributos
       const alineado = q.dir.x === 0 ? "middle" : q.dir.x < 0 ? "start" : "end";
       el("text", { class: "g-label", x: q.base.x - q.dir.x * 8, y: q.base.y - q.dir.y * 10,
-        "font-size": 11, style: `text-anchor:${alineado};fill:${enc ? "#0b7a3c" : "#101418"}` }, g)
+        "font-size": 11, style: `text-anchor:${alineado};fill:${enc ? "var(--c-activo)" : "var(--c-texto)"}` }, g)
         .textContent = q.p.n;
     }
   } else if (n.type === "label") {
@@ -1047,7 +1080,7 @@ function renderNode(n) {
 function renderWire(w) {
   if (!w.pts) return;
   const on = valorDe(w.from.id, idxSalida(w.from.pin || "o"));
-  const g = el("g", { "data-wid": w.id }, gWires);
+  const g = el("g", { "data-wid": w.id, style: estiloColor(w.color) }, gWires);
   el("path", { class: "wire-hit", d: pathD(w.pts) }, g);
   el("path", { class: "wire" + (on ? " hi" : "") + (S.selW.includes(w.id) ? " sel" : ""), d: pathD(w.pts) }, g);
 }
@@ -1086,7 +1119,7 @@ function nodoCerca(w, margen) {
   return best;
 }
 function render() {
-  correr(); routeAll();
+  correr(); routeAll(); aplicarTema();
   gWires.textContent = ""; gNodes.textContent = ""; gOv.textContent = "";
   viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
   $("#gridbg").style.display = S.showGrid ? "" : "none";
@@ -1128,6 +1161,7 @@ function renderInspector() {
       <button class="btn" id="w-reset">Ruta automática</button>
       <button class="btn" id="w-del">Borrar</button></div>
       <div class="hint" style="margin-top:8px">Los cables se rutean solos esquivando compuertas; los que salen de la misma salida comparten tronco.</div></div>`;
+    h += seccionColorPropio(wsel[0], "wc-", ["cable"]);
   }
   if (nsel.length) {
     const n = nsel[0];
@@ -1162,6 +1196,7 @@ function renderInspector() {
       <input type="number" id="n-y" step="${S.grid}" value="${Math.round(n.y)}"></div></div>`;
     h += `<div class="iconbar" style="margin-top:10px">
       <button class="btn" id="n-dup">Duplicar</button><button class="btn" id="n-del">Borrar</button></div></div>`;
+    h += seccionColorPropio(n, "nc-", clavesColor(n));
     if (n.type === "ff") h += panelBiestable(n);
     if (esSum(n)) h += panelSumador(n);
   }
@@ -1182,6 +1217,7 @@ function renderInspector() {
   if (!nsel.length && !wsel.length)
     h += `<div class="empty">Elegí una compuerta o un cable para editarlo.<br>
       <span style="font-size:11px">Arrastrá de un pin a otro para cablear.</span></div>`;
+  h += seccionTema();
   box.innerHTML = h;
   wireInspector(nsel, wsel);
 }
@@ -1247,6 +1283,47 @@ function panelSumador(n) {
   }
   h += `</tbody></table><div class="hint" style="margin-top:8px">${d.nota}</div></div>`;
   return h;
+}
+/* ---- colores: una sección para todo el circuito y otra para lo que esté elegido ---- */
+const clavesColor = (n) => n.type === "label" ? ["texto"] : ["relleno", "borde", "texto"];
+const filaColor = (id, k, valor) =>
+  `<label for="${id}">${NOMBRE_COLOR[k]}</label><input type="color" class="swatch" id="${id}" value="${valor}">`;
+function seccionTema() {
+  return `<div class="sec"><h3>Colores del circuito</h3><div class="cgrid">` +
+    Object.keys(TEMA_DEF).map(k => filaColor("t-" + k, k, temaDe(k))).join("") +
+    `</div><div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="t-reset">Volver al blanco y negro</button></div>
+    <div class="hint" style="margin-top:8px">Valen para todo el circuito y se guardan con él.
+      Si querés que una compuerta se despegue del resto, seleccionala y cambiale el color ahí.</div></div>`;
+}
+function seccionColorPropio(o, pre, claves) {
+  const propio = o.color && Object.keys(o.color).some(k => o.color[k]);
+  return `<div class="sec"><h3>Color propio</h3><div class="cgrid">` +
+    claves.map(k => filaColor(pre + k, k, colorEfectivo(o, k))).join("") + `</div>` +
+    (propio ? `<div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="${pre}reset">Usar los del circuito</button></div>` : "") +
+    `<div class="hint" style="margin-top:8px">${propio
+      ? "Tiene colores propios: no lo toca lo que cambies abajo."
+      : "Todavía sigue los colores del circuito. Tocá uno y se despega."}</div></div>`;
+}
+function wireTema() {
+  for (const k in TEMA_DEF) {
+    const e = document.getElementById("t-" + k); if (!e) continue;
+    e.addEventListener("input", () => lock(() => { S.tema[k] = e.value; render(); }));
+    e.addEventListener("change", () => { S.tema[k] = e.value; commit(); });
+  }
+  const r = document.getElementById("t-reset");
+  if (r) r.onclick = () => { S.tema = Object.assign({}, TEMA_DEF); commit(); render(); };
+}
+function wireColorPropio(pre, claves, objs) {
+  const pintar = (k, v) => objs.forEach(o => { o.color = Object.assign({}, o.color); o.color[k] = v; });
+  for (const k of claves) {
+    const e = document.getElementById(pre + k); if (!e) continue;
+    e.addEventListener("input", () => lock(() => { pintar(k, e.value); render(); }));
+    e.addEventListener("change", () => { pintar(k, e.value); commit(); render(); });
+  }
+  const r = document.getElementById(pre + "reset");
+  if (r) r.onclick = () => { objs.forEach(o => delete o.color); commit(); render(); };
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function lock(fn) { inspLock = true; try { fn(); } finally { inspLock = false; } }
@@ -1348,14 +1425,18 @@ function wireInspector(nsel, wsel) {
     sw.onclick = () => { const n = getNode(sw.dataset.sw); if (n) { n.on = !n.on; commit(); render(); } };
     sw.onkeydown = ev => { if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); sw.onclick(); } };
   });
+  if (nsel.length) wireColorPropio("nc-", clavesColor(nsel[0]), nsel);
+  if (wsel.length) wireColorPropio("wc-", ["cable"], wsel);
+  wireTema();
 }
 
 /* ======================= historial ======================= */
 let undoStack = [], redoStack = [], lastSnap = null;
-const snapshot = () => JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, variant: w.variant })), uidc });
+const snapshot = () => JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, variant: w.variant, color: w.color })), tema: S.tema, uidc });
 function restore(js) {
   const d = JSON.parse(js);
   S.nodes = d.nodes; S.wires = d.wires; uidc = d.uidc || uidc;
+  S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
   S.sel = S.sel.filter(getNode); S.selW = S.selW.filter(getWire);
 }
 function commit() {
@@ -1722,19 +1803,31 @@ function mostrarTabla() {
 /* ======================= exportar ======================= */
 /* Pasa las clases a atributos de presentación: así el SVG se ve igual en cualquier
    visor, aunque no interprete la hoja de estilos. */
+/* Los "@clave" se resuelven contra el color que le toca a ese elemento: el propio
+   si lo tiene, si no el del circuito. */
 const ESTILO_EXPORT = {
-  "g-body":  { fill: "#fff", stroke: "#101418", "stroke-width": 1.7, "stroke-linejoin": "round" },
-  "g-stub":  { fill: "none", stroke: "#101418", "stroke-width": 1.5 },
-  "g-label": { "font-family": "Arial,Helvetica,sans-serif", fill: "#101418",
+  "g-body":  { fill: "@relleno", stroke: "@borde", "stroke-width": 1.7, "stroke-linejoin": "round" },
+  "g-stub":  { fill: "none", stroke: "@borde", "stroke-width": 1.5 },
+  "g-label": { "font-family": "Arial,Helvetica,sans-serif", fill: "@texto",
                "text-anchor": "middle", "dominant-baseline": "central" },
-  "wire":    { fill: "none", stroke: "#9aa5ae", "stroke-width": 1.8,
+  "wire":    { fill: "none", stroke: "@cable", "stroke-width": 1.8,
                "stroke-linejoin": "round", "stroke-linecap": "round" },
-  "dot":     { fill: "#9aa5ae", stroke: "none" },
-  "led-off": { fill: "#eef1f4", stroke: "#101418", "stroke-width": 1.7 },
-  "led-on":  { fill: "#12a150", stroke: "#0b7a3c", "stroke-width": 1.7 },
-  "sw-track":{ fill: "#eef1f4", stroke: "#101418", "stroke-width": 1.7 },
-  "sw-knob": { fill: "#fff", stroke: "#101418", "stroke-width": 1.7 }
+  "dot":     { fill: "@cable", stroke: "none" },
+  "led-off": { fill: "#eef1f4", stroke: "@borde", "stroke-width": 1.7 },
+  "led-on":  { fill: "@activo", stroke: "@borde", "stroke-width": 1.7 },
+  "sw-track":{ fill: "#eef1f4", stroke: "@borde", "stroke-width": 1.7 },
+  "sw-knob": { fill: "@relleno", stroke: "@borde", "stroke-width": 1.7 }
 };
+/* El color propio quedó escrito como variable CSS en el <g> del elemento; en el
+   clon del export no hay hoja de estilos, así que la buscamos a mano hacia arriba. */
+function varLocal(e, k) {
+  for (let p = e; p; p = p.parentElement) {
+    const v = p.style && p.style.getPropertyValue("--c-" + k);
+    if (v) return v.trim();
+  }
+  return temaDe(k);
+}
+const resolver = (e, v) => typeof v === "string" && v[0] === "@" ? varLocal(e, v.slice(1)) : v;
 function inlinarEstilos(raiz) {
   raiz.querySelectorAll("*").forEach(e => {
     const cls = (e.getAttribute("class") || "").split(/\s+/).filter(Boolean);
@@ -1742,13 +1835,13 @@ function inlinarEstilos(raiz) {
     const at = {};
     for (const c of cls) if (ESTILO_EXPORT[c]) Object.assign(at, ESTILO_EXPORT[c]);
     if (cls.indexOf("hi") >= 0) Object.assign(at, cls.indexOf("dot") >= 0
-      ? { fill: "#12a150" } : { stroke: "#12a150", "stroke-width": 2.2 });
+      ? { fill: "@activo" } : { stroke: "@activo", "stroke-width": 2.2 });
     if (cls.indexOf("on") >= 0) {
       if (cls.indexOf("sw-track") >= 0) at.fill = "#e4f6ec";
-      if (cls.indexOf("sw-knob") >= 0) { at.fill = "#12a150"; at.stroke = "#0b7a3c"; }
+      if (cls.indexOf("sw-knob") >= 0) { at.fill = "@activo"; at.stroke = "@borde"; }
     }
     if (cls.indexOf("dashed") >= 0) at["stroke-dasharray"] = "6 4";
-    for (const k in at) if (!e.hasAttribute(k)) e.setAttribute(k, at[k]);
+    for (const k in at) if (!e.hasAttribute(k)) e.setAttribute(k, resolver(e, at[k]));
     e.removeAttribute("class");
   });
 }
@@ -1759,18 +1852,13 @@ function buildExportSVG() {
   s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
   const st = document.createElementNS(NS, "style");
-  st.textContent = `.g-body{fill:#fff;stroke:#101418;stroke-width:1.7;stroke-linejoin:round}
-    .g-stub{stroke:#101418;stroke-width:1.5;fill:none}
-    .g-label{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central}
-    .wire{fill:none;stroke:#9aa5ae;stroke-width:1.8;stroke-linejoin:round}
-    .wire.hi{stroke:#12a150;stroke-width:2.2}.dot{fill:#9aa5ae}.dot.hi{fill:#12a150}
-    .led-off{fill:#eef1f4;stroke:#101418;stroke-width:1.7}.led-on{fill:#12a150;stroke:#0b7a3c;stroke-width:1.7}
-    .sw-track{fill:#eef1f4;stroke:#101418;stroke-width:1.7}.sw-track.on{fill:#e4f6ec}
-    .sw-knob{fill:#fff;stroke:#101418;stroke-width:1.7}.sw-knob.on{fill:#12a150;stroke:#0b7a3c}`;
+  // las variables van en la raíz: los estilos sueltos que quedaron con var() las resuelven acá
+  st.textContent = `svg{${Object.keys(TEMA_DEF).map(k => `--c-${k}:${temaDe(k)}`).join(";")}}`;
+  s.setAttribute("style", Object.keys(TEMA_DEF).map(k => `--c-${k}:${temaDe(k)}`).join(";"));
   s.appendChild(st);
   const bg = document.createElementNS(NS, "rect");
   bg.setAttribute("x", b.l - m); bg.setAttribute("y", b.t - m);
-  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#fff");
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", temaDe("fondo"));
   s.appendChild(bg);
   const sn = S.sel, sw = S.selW; S.sel = []; S.selW = []; render();
   const gw = gWires.cloneNode(true), gn = gNodes.cloneNode(true);
@@ -1799,7 +1887,7 @@ $("#b-png").onclick = () => {
     const sc = 3, c = document.createElement("canvas");
     c.width = W * sc; c.height = H * sc;
     const ctx = c.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = temaDe("fondo"); ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0, c.width, c.height);
     c.toBlob(bl => { download("circuito.png", bl); toast("PNG descargado (3×)"); });
   };
@@ -1807,7 +1895,7 @@ $("#b-png").onclick = () => {
   img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s))));
 };
 $("#b-save").onclick = () => {
-  download("circuito.json", new Blob([JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to })) }, null, 1)], { type: "application/json" }));
+  download("circuito.json", new Blob([JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, color: w.color })), tema: S.tema }, null, 1)], { type: "application/json" }));
   toast("Circuito guardado");
 };
 $("#b-open").onclick = () => { $("#io-text").value = ""; $("#ov-io").classList.add("show"); $("#io-text").focus(); };
@@ -1816,6 +1904,7 @@ $("#io-ok").onclick = () => {
   try {
     const d = JSON.parse($("#io-text").value);
     S.nodes = d.nodes || []; S.wires = (d.wires || []).map(w => Object.assign({ variant: 0 }, w));
+    S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
     S.nodes.forEach(n => { if (n.type === "ff") n.clkArranque = false; });
     uidc = S.nodes.length + S.wires.length + 100;
     S.sel = []; S.selW = []; VAL = new Map(); commit(); fit();
