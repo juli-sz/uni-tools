@@ -166,6 +166,12 @@ svg#canvas{
 #canvas.split-mode .edge{stroke:var(--accent)}
 #canvas.split-mode g:hover>.edge{stroke-width:3.4}
 .band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+/* área de impresión: lo de afuera se sombrea porque no entra en la exportación */
+.hoja-fuera{fill:rgba(18,24,31,.06);pointer-events:none}
+.hoja-borde{fill:none;stroke:var(--accent);stroke-width:1.4;stroke-dasharray:8 5;
+  opacity:.8;pointer-events:none}
+.hoja-nombre{font-family:var(--mono);fill:var(--accent);opacity:.8;text-anchor:start;
+  pointer-events:none;user-select:none}
 .ghostline{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 4;fill:none;pointer-events:none}
 .e-label{font-family:var(--draw);font-size:11px;fill:var(--c-texto);text-anchor:middle;
   dominant-baseline:central;pointer-events:none}
@@ -281,6 +287,7 @@ svg#canvas{
 
   <div class="group collapsed">
     <span class="glab">Archivo</span>
+    <select id="b-hoja" style="width:128px" title="Área de impresión: marca en la hoja lo que va a entrar en el SVG y en el PNG"></select>
     <button class="btn ghost" id="b-example" title="Cargar diagrama de ejemplo">Ejemplo</button>
     <button class="btn ghost" id="b-clear" title="Vaciar la hoja">Vaciar</button>
     <button class="btn ghost" id="b-svg">SVG</button>
@@ -406,7 +413,8 @@ let S = {
   showGrid: true,
   zoom: 1,
   pan: { x: 60, y: 40 },
-  tema: null                 // se completa abajo con TEMA_DEF
+  tema: null,                // se completa abajo con TEMA_DEF
+  hoja: null                 // área de impresión: null = se exporta lo que haya
 };
 /* Colores del diagrama. Cada elemento puede pisar los que quiera en su propio .color */
 const TEMA_DEF = { relleno: "#ffffff", borde: "#101418", texto: "#101418",
@@ -436,6 +444,54 @@ function markerPara(color) {
     el("path", { d: "M0.5 1.2 L9.5 5 L0.5 8.8 z", fill: color }, m);
   }
   return `url(#${id})`;
+}
+/* ---------- área de impresión ----------
+   Un rectángulo en coordenadas de la hoja que marca qué se va a exportar. Los
+   tamaños están en px a 96 dpi, que es como el navegador mide una hoja real. */
+const HOJAS = {
+  "a4-h":    { nombre: "A4 apaisada",   w: 1123, h: 794 },
+  "a4-v":    { nombre: "A4 vertical",   w: 794,  h: 1123 },
+  "a3-h":    { nombre: "A3 apaisada",   w: 1587, h: 1123 },
+  "a3-v":    { nombre: "A3 vertical",   w: 1123, h: 1587 },
+  "a5-h":    { nombre: "A5 apaisada",   w: 794,  h: 559 },
+  "a5-v":    { nombre: "A5 vertical",   w: 559,  h: 794 },
+  "carta-h": { nombre: "Carta apaisada", w: 1056, h: 816 },
+  "carta-v": { nombre: "Carta vertical", w: 816,  h: 1056 },
+  "16-9":    { nombre: "16:9 diapositiva", w: 1280, h: 720 },
+  "1-1":     { nombre: "Cuadrada",      w: 900,  h: 900 }
+};
+const hojaActiva = () => S.hoja && S.hoja.preset ? S.hoja : null;
+/* El área se guarda con su propio ancho y alto: si después la estirás a mano,
+   el preset queda como referencia pero mandan los números. */
+function ponerHoja(preset) {
+  if (!preset) { S.hoja = null; return; }
+  const d = HOJAS[preset] || HOJAS["a4-h"];
+  const prev = hojaActiva();
+  const cx = prev ? prev.x + prev.w / 2 : centroVista().x;
+  const cy = prev ? prev.y + prev.h / 2 : centroVista().y;
+  S.hoja = { preset, w: d.w, h: d.h, x: Math.round(cx - d.w / 2), y: Math.round(cy - d.h / 2) };
+}
+function centroVista() {                       // el medio de lo dibujado, o de lo que se ve
+  if (S.nodes.length) { const b = bboxAll(); return { x: (b.l + b.r) / 2, y: (b.t + b.b) / 2 }; }
+  const r = svg.getBoundingClientRect();
+  return { x: (r.width / 2 - S.pan.x) / S.zoom, y: (r.height / 2 - S.pan.y) / S.zoom };
+}
+function centrarHoja() {
+  const H = hojaActiva(); if (!H) return;
+  const c = centroVista();
+  H.x = Math.round(c.x - H.w / 2); H.y = Math.round(c.y - H.h / 2);
+}
+function renderHoja() {
+  const H = hojaActiva(); if (!H) return;
+  const g = el("g", { class: "hoja" }, gOv);
+  const M = 40000;                              // el sombreado tapa todo lo que quede afuera
+  for (const [x, y, w, h] of [[H.x - M, H.y - M, M * 2 + H.w, M], [H.x - M, H.y + H.h, M * 2 + H.w, M],
+                              [H.x - M, H.y, M, H.h], [H.x + H.w, H.y, M, H.h]])
+    el("rect", { class: "hoja-fuera", x, y, width: w, height: h }, g);
+  el("rect", { class: "hoja-borde", x: H.x, y: H.y, width: H.w, height: H.h }, g);
+  const t = el("text", { class: "hoja-nombre", x: H.x, y: H.y - 9,
+    "font-size": Math.max(11, Math.round(11 / S.zoom)) }, g);
+  t.textContent = `${(HOJAS[H.preset] || {}).nombre || "Área"} · ${H.w} × ${H.h}`;
 }
 let uidc = 1;
 const uid = (p) => p + (uidc++);
@@ -1020,6 +1076,7 @@ function render() {
   for (const e of S.edges) renderEdge(e);
   for (const p of junctionDots()) el("circle", { class: "n-dot", cx: p.x, cy: p.y, r: 4.5 }, gEdges);
   for (const n of S.nodes) renderNode(n);
+  renderHoja();
   renderPorts();
   if (drag && drag.kind === "connect" && drag.cur) {
     const a = drag.start;
@@ -1034,6 +1091,7 @@ function render() {
   $("#st-e").textContent = S.edges.length;
   $("#st-s").textContent = (S.sel.length + S.selEdges.length) ? (S.sel.length + " elem · " + S.selEdges.length + " flechas") : "—";
   $("#zoomlab").textContent = Math.round(S.zoom * 100) + "%";
+  $("#b-hoja").value = S.hoja ? S.hoja.preset : "";
   $("#b-undo").disabled = !undoStack.length;
   $("#b-redo").disabled = !redoStack.length;
   renderInspector();
@@ -1053,10 +1111,10 @@ function renderInspector() {
         <div class="row"><label>Fondo</label><div class="fill"><select id="p-grid">
           <option value="1">Grilla visible</option><option value="0">Hoja limpia</option></select></div></div>
         <div class="hint">La grilla no se exporta al SVG ni al PNG.</div>
-      </div>` + seccionTema();
+      </div>` + seccionHoja() + seccionTema();
     const g = $("#p-grid"); g.value = S.showGrid ? "1" : "0";
     g.onchange = () => { S.showGrid = g.value === "1"; render(); };
-    wireTema();
+    wireHoja(); wireTema();
     return;
   }
   let h = "";
@@ -1132,7 +1190,7 @@ function renderInspector() {
       <button class="btn" id="n-snap">Imantar</button>
     </div></div>`;
   }
-  h += seccionTema();
+  h += seccionHoja() + seccionTema();
   box.innerHTML = h;
   wireInspector(nsel, esel);
 }
@@ -1142,6 +1200,56 @@ const clavesColor = (n) => n.type === "node" ? ["flecha"]
   : ["relleno", "borde", "texto"];
 const filaColor = (id, k, valor) =>
   `<label for="${id}">${NOMBRE_COLOR[k]}</label><input type="color" class="swatch" id="${id}" value="${valor}">`;
+function seccionHoja() {
+  const H = hojaActiva();
+  let h = `<div class="sec"><h3>Área de impresión</h3>
+    <div class="row"><label>Tamaño</label><div class="fill"><select id="h-preset">
+      <option value="">Sin área fija</option>` +
+    Object.keys(HOJAS).map(k => `<option value="${k}"${H && H.preset === k ? " selected" : ""}>${HOJAS[k].nombre}</option>`).join("") +
+    `</select></div></div>`;
+  if (!H) return h + `<div class="hint">Sin área fija, la exportación recorta sola alrededor de lo que
+    haya dibujado. Elegí un tamaño para acomodar los elementos dentro del recuadro y que el SVG y el
+    PNG salgan con esas proporciones.</div></div>`;
+  h += `<div class="grid4">
+      <div class="row"><label style="width:22px">An</label><div class="fill"><input type="number" id="h-w" step="10" min="60" value="${H.w}"></div></div>
+      <div class="row"><label style="width:22px">Al</label><div class="fill"><input type="number" id="h-h" step="10" min="60" value="${H.h}"></div></div>
+      <div class="row"><label style="width:22px">X</label><div class="fill"><input type="number" id="h-x" step="${S.grid}" value="${Math.round(H.x)}"></div></div>
+      <div class="row"><label style="width:22px">Y</label><div class="fill"><input type="number" id="h-y" step="${S.grid}" value="${Math.round(H.y)}"></div></div>
+    </div>
+    <div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="h-centrar">Centrar en el dibujo</button>
+      <button class="btn" id="h-girar">Girar la hoja</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Lo que quede afuera del recuadro se ve sombreado y no
+      entra en la exportación. <kbd>F</kbd> encuadra la hoja entera.</div></div>`;
+  return h;
+}
+function wireHoja() {
+  const sel = document.getElementById("h-preset");
+  if (sel) sel.onchange = () => { ponerHoja(sel.value); commit(); render(); };
+  const H = hojaActiva(); if (!H) return;
+  const num = (id, fn) => {
+    const e = document.getElementById(id); if (!e) return;
+    e.addEventListener("input", () => lock(() => { fn(+e.value); render(); }));
+    e.addEventListener("change", () => { fn(+e.value); commit(); render(); });
+    e.addEventListener("keydown", ev => ev.stopPropagation());
+  };
+  num("h-w", v => { if (v >= 60) H.w = v; });
+  num("h-h", v => { if (v >= 60) H.h = v; });
+  num("h-x", v => H.x = v);
+  num("h-y", v => H.y = v);
+  const c = document.getElementById("h-centrar");
+  if (c) c.onclick = () => { centrarHoja(); commit(); render(); };
+  const g = document.getElementById("h-girar");
+  if (g) g.onclick = () => {                       // gira sobre su propio centro
+    const cx = H.x + H.w / 2, cy = H.y + H.h / 2;
+    const w = H.w; H.w = H.h; H.h = w;
+    H.x = Math.round(cx - H.w / 2); H.y = Math.round(cy - H.h / 2);
+    const par = Object.keys(HOJAS).find(k => HOJAS[k].w === H.w && HOJAS[k].h === H.h);
+    if (par) H.preset = par;
+    commit(); render();
+  };
+}
 function seccionTema() {
   return `<div class="sec"><h3>Colores del diagrama</h3><div class="cgrid">` +
     Object.keys(TEMA_DEF).map(k => filaColor("t-" + k, k, temaDe(k))).join("") +
@@ -1232,16 +1340,17 @@ function wireInspector(nsel, esel) {
 
   if (nsel.length) wireColorPropio("nc-", clavesColor(nsel[0]), nsel);
   if (esel.length) wireColorPropio("ec-", ["flecha"], esel);
-  wireTema();
+  wireHoja(); wireTema();
 }
 
 /* ======================= historial ======================= */
 let undoStack = [], redoStack = [];
-const snapshot = () => JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema, uidc });
+const snapshot = () => JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema, hoja: S.hoja, uidc });
 function restore(js) {
   const d = JSON.parse(js);
   S.nodes = d.nodes; S.edges = d.edges; uidc = d.uidc || uidc;
   S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
+  S.hoja = d.hoja || null;
   S.sel = S.sel.filter(id => getNode(id)); S.selEdges = S.selEdges.filter(id => getEdge(id));
 }
 let lastSnap = null;
@@ -1516,8 +1625,10 @@ function align(kind) {
   commit(); render();
 }
 function fit() {
-  if (!S.nodes.length) { S.zoom = 1; S.pan = { x: 60, y: 40 }; render(); return; }
-  const b = bboxAll(), r = svg.getBoundingClientRect(), m = 60;
+  const H = hojaActiva();                       // con área definida, encuadrar es ver la hoja entera
+  if (!S.nodes.length && !H) { S.zoom = 1; S.pan = { x: 60, y: 40 }; render(); return; }
+  const b = H ? { l: H.x, t: H.y, r: H.x + H.w, b: H.y + H.h } : bboxAll();
+  const r = svg.getBoundingClientRect(), m = 60;
   const z = Math.min((r.width - m * 2) / Math.max(1, b.r - b.l), (r.height - m * 2) / Math.max(1, b.b - b.t), 2);
   S.zoom = Math.max(.2, z);
   S.pan.x = (r.width - (b.r - b.l) * S.zoom) / 2 - b.l * S.zoom;
@@ -1531,8 +1642,11 @@ function toast(msg) {
 
 /* ======================= exportar ======================= */
 function buildExportSVG() {
-  const b = bboxAll(), m = 30;
-  const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
+  // con área de impresión se exporta exactamente ese rectángulo, sin márgenes
+  const hj = hojaActiva();
+  const b = hj ? { l: hj.x, t: hj.y, r: hj.x + hj.w, b: hj.y + hj.h } : bboxAll(), m = hj ? 0 : 30;
+  const W = hj ? hj.w : Math.max(60, b.r - b.l) + m * 2;
+  const H = hj ? hj.h : Math.max(60, b.b - b.t) + m * 2;
   const s = document.createElementNS(NS, "svg");
   s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
@@ -1596,7 +1710,7 @@ $("#b-png").onclick = () => {
   img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(str)));
 };
 $("#b-save").onclick = () => {
-  download("diagrama-bloques.json", new Blob([JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema }, null, 1)], { type: "application/json" }));
+  download("diagrama-bloques.json", new Blob([JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema, hoja: S.hoja }, null, 1)], { type: "application/json" }));
   toast("Diagrama guardado");
 };
 $("#b-open").onclick = () => {
@@ -1608,6 +1722,7 @@ $("#io-ok").onclick = () => {
     const d = JSON.parse($("#io-text").value);
     S.nodes = d.nodes || []; S.edges = d.edges || [];
     S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
+    S.hoja = d.hoja || null;
     uidc = S.nodes.length + S.edges.length + 100;
     S.sel = []; S.selEdges = []; commit(); fit(); render();
     $("#ov-io").classList.remove("show"); toast("Diagrama cargado");
@@ -1650,6 +1765,14 @@ $("#b-snapall").onclick = () => {
 $("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
 $("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
 $("#b-fit").onclick = fit;
+// selector de área de impresión
+$("#b-hoja").innerHTML = `<option value="">Sin área fija</option>` +
+  Object.keys(HOJAS).map(k => `<option value="${k}">${HOJAS[k].nombre}</option>`).join("");
+$("#b-hoja").onchange = (ev) => {
+  ponerHoja(ev.target.value);
+  commit(); render();
+  if (hojaActiva()) { fit(); toast("El SVG y el PNG van a salir con este recorte"); }
+};
 $("#b-help").onclick = () => $("#ov-help").classList.add("show");
 $("#b-clear").onclick = () => {
   if (!S.nodes.length || confirm("¿Vaciar la hoja? Se borra todo el diagrama.")) {
