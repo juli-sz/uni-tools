@@ -164,6 +164,12 @@ svg#canvas{
 .pin.taken{stroke:var(--c-cable)}
 .pin-hit{fill:transparent;stroke:none;cursor:crosshair}
 .band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+/* área de impresión: lo de afuera se sombrea porque no entra en la exportación */
+.hoja-fuera{fill:rgba(18,24,31,.06);pointer-events:none}
+.hoja-borde{fill:none;stroke:var(--accent);stroke-width:1.4;stroke-dasharray:8 5;
+  opacity:.8;pointer-events:none}
+.hoja-nombre{font-family:var(--mono);fill:var(--accent);opacity:.8;text-anchor:start;
+  pointer-events:none;user-select:none}
 .ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
 .led-off{fill:#eef1f4;stroke:var(--c-borde);stroke-width:1.7}
 .led-on{fill:var(--c-activo);stroke:var(--c-borde);stroke-width:1.7}
@@ -272,6 +278,7 @@ svg#canvas{
 
   <div class="group collapsed">
     <span class="glab">Archivo</span>
+    <select id="b-hoja" style="width:128px" title="Área de impresión: marca en la hoja lo que va a entrar en el SVG y en el PNG"></select>
     <button class="btn ghost" id="b-svg">SVG</button>
     <button class="btn ghost" id="b-png">PNG</button>
     <button class="btn ghost" id="b-save">Guardar</button>
@@ -503,7 +510,8 @@ const inX  = (n) => -bodyW(n) / 2 - STUB;
 
 let uidc = 1; const uid = (p) => p + (uidc++);
 let S = { nodes: [], wires: [], sel: [], selW: [], snap: true, grid: 20,
-  showGrid: true, zoom: 1, pan: { x: 80, y: 60 }, tema: null };
+  showGrid: true, zoom: 1, pan: { x: 80, y: 60 }, tema: null,
+  hoja: null };                       // área de impresión: null = se exporta lo que haya
 let VAL = new Map(), OSC = false;
 
 /* Colores del circuito. Cada compuerta o cable puede pisar los que quiera en su .color */
@@ -518,6 +526,53 @@ const temaDe = (k) => (S.tema && S.tema[k]) || TEMA_DEF[k];
 const estiloColor = (c) => !c ? "" :
   Object.keys(c).filter(k => c[k]).map(k => `--c-${k}:${c[k]}`).join(";");
 const colorEfectivo = (o, k) => (o && o.color && o.color[k]) || temaDe(k);
+/* ---------- área de impresión ----------
+   Un rectángulo en coordenadas de la hoja que marca qué se va a exportar. Los
+   tamaños están en px a 96 dpi, que es como el navegador mide una hoja real. */
+const HOJAS = {
+  "a4-h":    { nombre: "A4 apaisada",   w: 1123, h: 794 },
+  "a4-v":    { nombre: "A4 vertical",   w: 794,  h: 1123 },
+  "a3-h":    { nombre: "A3 apaisada",   w: 1587, h: 1123 },
+  "a3-v":    { nombre: "A3 vertical",   w: 1123, h: 1587 },
+  "a5-h":    { nombre: "A5 apaisada",   w: 794,  h: 559 },
+  "a5-v":    { nombre: "A5 vertical",   w: 559,  h: 794 },
+  "carta-h": { nombre: "Carta apaisada", w: 1056, h: 816 },
+  "carta-v": { nombre: "Carta vertical", w: 816,  h: 1056 },
+  "16-9":    { nombre: "16:9 diapositiva", w: 1280, h: 720 },
+  "1-1":     { nombre: "Cuadrada",      w: 900,  h: 900 }
+};
+const hojaActiva = () => S.hoja && S.hoja.preset ? S.hoja : null;
+/* El área se guarda con su propio ancho y alto: si después la estirás a mano,
+   el preset queda como referencia pero mandan los números. */
+function ponerHoja(preset) {
+  if (!preset) { S.hoja = null; return; }
+  const d = HOJAS[preset] || HOJAS["a4-h"];
+  const prev = hojaActiva(), c = centroVista();
+  const cx = prev ? prev.x + prev.w / 2 : c.x, cy = prev ? prev.y + prev.h / 2 : c.y;
+  S.hoja = { preset, w: d.w, h: d.h, x: Math.round(cx - d.w / 2), y: Math.round(cy - d.h / 2) };
+}
+function centroVista() {                       // el medio de lo dibujado, o de lo que se ve
+  if (S.nodes.length) { const b = bboxAll(); return { x: (b.l + b.r) / 2, y: (b.t + b.b) / 2 }; }
+  const r = svg.getBoundingClientRect();
+  return { x: (r.width / 2 - S.pan.x) / S.zoom, y: (r.height / 2 - S.pan.y) / S.zoom };
+}
+function centrarHoja() {
+  const H = hojaActiva(); if (!H) return;
+  const c = centroVista();
+  H.x = Math.round(c.x - H.w / 2); H.y = Math.round(c.y - H.h / 2);
+}
+function renderHoja() {
+  const H = hojaActiva(); if (!H) return;
+  const g = el("g", { class: "hoja" }, gOv);
+  const M = 40000;                              // el sombreado tapa todo lo que quede afuera
+  for (const [x, y, w, h] of [[H.x - M, H.y - M, M * 2 + H.w, M], [H.x - M, H.y + H.h, M * 2 + H.w, M],
+                              [H.x - M, H.y, M, H.h], [H.x + H.w, H.y, M, H.h]])
+    el("rect", { class: "hoja-fuera", x, y, width: w, height: h }, g);
+  el("rect", { class: "hoja-borde", x: H.x, y: H.y, width: H.w, height: H.h }, g);
+  const t = el("text", { class: "hoja-nombre", x: H.x, y: H.y - 9,
+    "font-size": Math.max(11, Math.round(11 / S.zoom)) }, g);
+  t.textContent = `${(HOJAS[H.preset] || {}).nombre || "Área"} · ${H.w} × ${H.h}`;
+}
 function aplicarTema() {
   for (const k in TEMA_DEF) {
     svg.style.setProperty("--c-" + k, temaDe(k));
@@ -1127,6 +1182,7 @@ function render() {
   for (const d of junctionDots())
     el("circle", { class: "dot" + (valorDe(d.id, d.i) ? " hi" : ""), cx: d.p.x, cy: d.p.y, r: 4 }, gWires);
   for (const n of S.nodes) renderNode(n);
+  renderHoja();
   renderPins();
   if (drag && drag.kind === "connect" && drag.cur)
     el("path", { class: "ghostline", d: `M ${drag.start.x} ${drag.start.y} L ${drag.cur.x} ${drag.start.y} L ${drag.cur.x} ${drag.cur.y}` }, gOv);
@@ -1143,6 +1199,7 @@ function render() {
   $("#st-warn").innerHTML = OSC ? '<span class="warn">el circuito oscila: revisá la realimentación</span>'
     : sueltas ? `<span class="k">entradas sin conectar</span> ${sueltas}` : "";
   $("#zoomlab").textContent = Math.round(S.zoom * 100) + "%";
+  $("#b-hoja").value = S.hoja ? S.hoja.preset : "";
   $("#b-undo").disabled = !undoStack.length;
   $("#b-redo").disabled = !redoStack.length;
   renderInspector();
@@ -1217,7 +1274,7 @@ function renderInspector() {
   if (!nsel.length && !wsel.length)
     h += `<div class="empty">Elegí una compuerta o un cable para editarlo.<br>
       <span style="font-size:11px">Arrastrá de un pin a otro para cablear.</span></div>`;
-  h += seccionTema();
+  h += seccionHoja() + seccionTema();
   box.innerHTML = h;
   wireInspector(nsel, wsel);
 }
@@ -1288,6 +1345,56 @@ function panelSumador(n) {
 const clavesColor = (n) => n.type === "label" ? ["texto"] : ["relleno", "borde", "texto"];
 const filaColor = (id, k, valor) =>
   `<label for="${id}">${NOMBRE_COLOR[k]}</label><input type="color" class="swatch" id="${id}" value="${valor}">`;
+function seccionHoja() {
+  const H = hojaActiva();
+  let h = `<div class="sec"><h3>Área de impresión</h3>
+    <div class="row"><label>Tamaño</label><div class="fill"><select id="h-preset">
+      <option value="">Sin área fija</option>` +
+    Object.keys(HOJAS).map(k => `<option value="${k}"${H && H.preset === k ? " selected" : ""}>${HOJAS[k].nombre}</option>`).join("") +
+    `</select></div></div>`;
+  if (!H) return h + `<div class="hint">Sin área fija, la exportación recorta sola alrededor de lo que
+    haya dibujado. Elegí un tamaño para acomodar las compuertas dentro del recuadro y que el SVG y el
+    PNG salgan con esas proporciones.</div></div>`;
+  h += `<div class="grid4">
+      <div class="row"><label style="width:22px">An</label><div class="fill"><input type="number" id="h-w" step="10" min="60" value="${H.w}"></div></div>
+      <div class="row"><label style="width:22px">Al</label><div class="fill"><input type="number" id="h-h" step="10" min="60" value="${H.h}"></div></div>
+      <div class="row"><label style="width:22px">X</label><div class="fill"><input type="number" id="h-x" step="${S.grid}" value="${Math.round(H.x)}"></div></div>
+      <div class="row"><label style="width:22px">Y</label><div class="fill"><input type="number" id="h-y" step="${S.grid}" value="${Math.round(H.y)}"></div></div>
+    </div>
+    <div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="h-centrar">Centrar en el circuito</button>
+      <button class="btn" id="h-girar">Girar la hoja</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Lo que quede afuera del recuadro se ve sombreado y no
+      entra en la exportación. <kbd>F</kbd> encuadra la hoja entera.</div></div>`;
+  return h;
+}
+function wireHoja() {
+  const sel = document.getElementById("h-preset");
+  if (sel) sel.onchange = () => { ponerHoja(sel.value); commit(); render(); };
+  const H = hojaActiva(); if (!H) return;
+  const num = (id, fn) => {
+    const e = document.getElementById(id); if (!e) return;
+    e.addEventListener("input", () => lock(() => { fn(+e.value); render(); }));
+    e.addEventListener("change", () => { fn(+e.value); commit(); render(); });
+    e.addEventListener("keydown", ev => ev.stopPropagation());
+  };
+  num("h-w", v => { if (v >= 60) H.w = v; });
+  num("h-h", v => { if (v >= 60) H.h = v; });
+  num("h-x", v => H.x = v);
+  num("h-y", v => H.y = v);
+  const c = document.getElementById("h-centrar");
+  if (c) c.onclick = () => { centrarHoja(); commit(); render(); };
+  const g = document.getElementById("h-girar");
+  if (g) g.onclick = () => {                       // gira sobre su propio centro
+    const cx = H.x + H.w / 2, cy = H.y + H.h / 2;
+    const w = H.w; H.w = H.h; H.h = w;
+    H.x = Math.round(cx - H.w / 2); H.y = Math.round(cy - H.h / 2);
+    const par = Object.keys(HOJAS).find(k => HOJAS[k].w === H.w && HOJAS[k].h === H.h);
+    if (par) H.preset = par;
+    commit(); render();
+  };
+}
 function seccionTema() {
   return `<div class="sec"><h3>Colores del circuito</h3><div class="cgrid">` +
     Object.keys(TEMA_DEF).map(k => filaColor("t-" + k, k, temaDe(k))).join("") +
@@ -1427,16 +1534,17 @@ function wireInspector(nsel, wsel) {
   });
   if (nsel.length) wireColorPropio("nc-", clavesColor(nsel[0]), nsel);
   if (wsel.length) wireColorPropio("wc-", ["cable"], wsel);
-  wireTema();
+  wireHoja(); wireTema();
 }
 
 /* ======================= historial ======================= */
 let undoStack = [], redoStack = [], lastSnap = null;
-const snapshot = () => JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, variant: w.variant, color: w.color })), tema: S.tema, uidc });
+const snapshot = () => JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, variant: w.variant, color: w.color })), tema: S.tema, hoja: S.hoja, uidc });
 function restore(js) {
   const d = JSON.parse(js);
   S.nodes = d.nodes; S.wires = d.wires; uidc = d.uidc || uidc;
   S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
+  S.hoja = d.hoja || null;
   S.sel = S.sel.filter(getNode); S.selW = S.selW.filter(getWire);
 }
 function commit() {
@@ -1757,8 +1865,10 @@ function align(kind) {
   commit(); render();
 }
 function fit() {
-  if (!S.nodes.length) { S.zoom = 1; S.pan = { x: 80, y: 60 }; render(); return; }
-  const b = bboxAll(), r = svg.getBoundingClientRect(), m = 70;
+  const hj = hojaActiva();                      // con área definida, encuadrar es ver la hoja entera
+  if (!S.nodes.length && !hj) { S.zoom = 1; S.pan = { x: 80, y: 60 }; render(); return; }
+  const b = hj ? { l: hj.x, t: hj.y, r: hj.x + hj.w, b: hj.y + hj.h } : bboxAll();
+  const r = svg.getBoundingClientRect(), m = 70;
   S.zoom = Math.max(.2, Math.min((r.width - m * 2) / Math.max(1, b.r - b.l), (r.height - m * 2) / Math.max(1, b.b - b.t), 1.8));
   S.pan.x = (r.width - (b.r - b.l) * S.zoom) / 2 - b.l * S.zoom;
   S.pan.y = (r.height - (b.b - b.t) * S.zoom) / 2 - b.t * S.zoom;
@@ -1846,8 +1956,11 @@ function inlinarEstilos(raiz) {
   });
 }
 function buildExportSVG() {
-  const b = bboxAll(), m = 28;
-  const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
+  // con área de impresión se exporta exactamente ese rectángulo, sin márgenes
+  const hj = hojaActiva();
+  const b = hj ? { l: hj.x, t: hj.y, r: hj.x + hj.w, b: hj.y + hj.h } : bboxAll(), m = hj ? 0 : 28;
+  const W = hj ? hj.w : Math.max(60, b.r - b.l) + m * 2;
+  const H = hj ? hj.h : Math.max(60, b.b - b.t) + m * 2;
   const s = document.createElementNS(NS, "svg");
   s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
@@ -1895,7 +2008,7 @@ $("#b-png").onclick = () => {
   img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s))));
 };
 $("#b-save").onclick = () => {
-  download("circuito.json", new Blob([JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, color: w.color })), tema: S.tema }, null, 1)], { type: "application/json" }));
+  download("circuito.json", new Blob([JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, color: w.color })), tema: S.tema, hoja: S.hoja }, null, 1)], { type: "application/json" }));
   toast("Circuito guardado");
 };
 $("#b-open").onclick = () => { $("#io-text").value = ""; $("#ov-io").classList.add("show"); $("#io-text").focus(); };
@@ -1905,6 +2018,7 @@ $("#io-ok").onclick = () => {
     const d = JSON.parse($("#io-text").value);
     S.nodes = d.nodes || []; S.wires = (d.wires || []).map(w => Object.assign({ variant: 0 }, w));
     S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
+    S.hoja = d.hoja || null;
     S.nodes.forEach(n => { if (n.type === "ff") n.clkArranque = false; });
     uidc = S.nodes.length + S.wires.length + 100;
     S.sel = []; S.selW = []; VAL = new Map(); commit(); fit();
@@ -1922,6 +2036,14 @@ $("#b-gridshow").onclick = () => { S.showGrid = !S.showGrid; render(); };
 $("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
 $("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
 $("#b-fit").onclick = fit;
+// selector de área de impresión
+$("#b-hoja").innerHTML = `<option value="">Sin área fija</option>` +
+  Object.keys(HOJAS).map(k => `<option value="${k}">${HOJAS[k].nombre}</option>`).join("");
+$("#b-hoja").onchange = (ev) => {
+  ponerHoja(ev.target.value);
+  commit(); render();
+  if (hojaActiva()) { fit(); toast("El SVG y el PNG van a salir con este recorte"); }
+};
 $("#b-truth").onclick = mostrarTabla;
 $("#b-help").onclick = () => $("#ov-help").classList.add("show");
 $("#b-clear").onclick = () => {
