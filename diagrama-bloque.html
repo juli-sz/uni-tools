@@ -153,6 +153,13 @@ svg#canvas{
   --c-flecha:#101418; --c-fondo:#ffffff;
 }
 .n-shape{fill:var(--c-relleno);stroke:var(--c-borde);stroke-width:1.6}
+/* recuadros para encuadrar: el relleno "suave" es el propio color del trazo aguado */
+.m-shape{fill:none;stroke:var(--c-borde);stroke-linejoin:round}
+.m-shape.solido{fill:var(--c-relleno)}
+.m-shape.suave{fill:var(--c-borde);fill-opacity:.1}
+.m-label{font-family:var(--draw);fill:var(--c-borde);text-anchor:start;dominant-baseline:central;
+  pointer-events:none;user-select:none}
+.sel .m-shape{stroke:var(--accent)}
 .n-label{font-family:var(--draw);fill:var(--c-texto);text-anchor:middle;dominant-baseline:central;
   pointer-events:none;user-select:none}
 .n-math{font-family:var(--draw);fill:var(--c-texto);text-anchor:start;dominant-baseline:central;
@@ -189,12 +196,21 @@ svg#canvas{
   dominant-baseline:central;pointer-events:none}
 .e-label-bg{fill:var(--c-fondo)}
 /* muestras de color del panel */
-.swatch{width:100%;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;
-  background:none;cursor:pointer}
+.swatch{width:26px;height:22px;padding:0;border:1px solid var(--line);border-radius:5px;
+  background:none;cursor:pointer;flex:none}
 .swatch::-webkit-color-swatch-wrapper{padding:2px}
-.swatch::-webkit-color-swatch{border:none;border-radius:4px}
-.cgrid{display:grid;grid-template-columns:64px 1fr;gap:6px 8px;align-items:center}
+.swatch::-webkit-color-swatch{border:none;border-radius:3px}
+.cgrid{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center}
 .cgrid label{font-size:11.5px;color:var(--ink-2)}
+/* paleta: un tirito de colores a mano, más el selector libre al final */
+.paleta{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.pcol{width:19px;height:19px;padding:0;border-radius:50%;cursor:pointer;flex:none;
+  border:1px solid rgba(18,24,31,.22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+.pcol:hover{transform:scale(1.12)}
+.pcol.sel{box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px var(--accent)}
+.pcol.grande{width:24px;height:24px}
+.pcol.quitable{cursor:pointer}
+.pcol.quitable:hover{border-color:var(--warn);transform:scale(1.12)}
 
 /* ---------- Toggles de UI (Navbar y Panel) ---------- */
 #inspector { 
@@ -342,6 +358,7 @@ svg#canvas{
       <g id="gMeasure" style="visibility:hidden;pointer-events:none"></g>
       <g id="viewport">
         <rect id="gridbg" x="-6000" y="-6000" width="14000" height="14000" fill="url(#gridPat10)"/>
+        <g id="gAtras"></g>
         <g id="gEdges"></g>
         <g id="gNodes"></g>
         <g id="gOverlay"></g>
@@ -355,6 +372,7 @@ svg#canvas{
       <button class="ptool" data-add="node"><svg viewBox="0 0 30 22"><path d="M2 11h26M15 11v9"/><circle cx="15" cy="11" r="2.6" fill="currentColor"/></svg><span>Bifurcación en flecha</span><kbd>N</kbd></button>
       <button class="ptool" data-add="io"><svg viewBox="0 0 30 22"><text x="2" y="15" font-size="10" fill="currentColor" stroke="none">R(s)</text><path d="M18 11h10M25 8l3 3-3 3"/></svg><span>Entrada / salida</span><kbd>E</kbd></button>
       <button class="ptool" data-add="text"><svg viewBox="0 0 30 22"><path d="M6 6h18M15 6v12"/></svg><span>Texto libre</span><kbd>T</kbd></button>
+      <button class="ptool" data-add="marco"><svg viewBox="0 0 30 22"><rect x="3" y="3" width="24" height="16" stroke-dasharray="4 3"/></svg><span>Recuadro</span><kbd>M</kbd></button>
     </div>
 
     <div id="toast"></div>
@@ -423,6 +441,7 @@ svg#canvas{
 const NS = "http://www.w3.org/2000/svg";
 const $ = (s) => document.querySelector(s);
 const svg = $("#canvas"), viewport = $("#viewport");
+const gAtras = $("#gAtras");            // recuadros que van por debajo de todo
 const gEdges = $("#gEdges"), gNodes = $("#gNodes"), gOv = $("#gOverlay");
 
 /* ======================= modelo ======================= */
@@ -490,6 +509,26 @@ const TEMA_DEF = { relleno: "#ffffff", borde: "#101418", texto: "#101418",
                    flecha: "#101418", fondo: "#ffffff" };
 const NOMBRE_COLOR = { relleno: "Relleno", borde: "Contorno", texto: "Letras",
                        flecha: "Flechas", fondo: "Fondo" };
+/* Paleta a mano: los cinco primeros vienen fijos y los que agregues quedan
+   guardados en este navegador, así te siguen entre diagramas. */
+const PALETA_BASE = ["#101418", "#166534", "#0d5bd6", "#c81e1e", "#c2410c"];
+const NOMBRE_PALETA = { "#101418": "Negro", "#166534": "Verde oscuro", "#0d5bd6": "Azul",
+                        "#c81e1e": "Rojo", "#c2410c": "Naranja", "#ffffff": "Blanco" };
+const CLAVE_PALETA = "uni-tools-paleta";
+function leerPaleta() {
+  try {
+    const g = JSON.parse(localStorage.getItem(CLAVE_PALETA) || "[]");
+    return PALETA_BASE.concat(g.filter(c => /^#[0-9a-f]{6}$/i.test(c) &&
+      PALETA_BASE.indexOf(c.toLowerCase()) < 0).map(c => c.toLowerCase()));
+  } catch (e) { return PALETA_BASE.slice(); }
+}
+function guardarPaleta() {
+  try {
+    localStorage.setItem(CLAVE_PALETA,
+      JSON.stringify(paleta.filter(c => PALETA_BASE.indexOf(c) < 0)));
+  } catch (e) {}                       // sin localStorage la paleta dura la sesión
+}
+let paleta = leerPaleta();
 S.tema = Object.assign({}, TEMA_DEF);
 const temaDe = (k) => (S.tema && S.tema[k]) || TEMA_DEF[k];
 /* Un color propio se aplica redefiniendo la variable CSS en el <g> del elemento:
@@ -570,8 +609,18 @@ const DEF = {
   sum:   { w: 50, h: 50, label: "", font: 13, signs: { l: "+", t: "", r: "", b: "−" }, cross: true },
   node:  { w: 10, h: 10, label: "" },
   io:    { w: 46, h: 22, label: "R(s)", font: 14 },
-  text:  { w: 60, h: 20, label: "Texto", font: 13 }
+  text:  { w: 60, h: 20, label: "Texto", font: 13 },
+  marco: { w: 240, h: 150, label: "", font: 12 }
 };
+const esMarco = (n) => !!n && n.type === "marco";
+const TRAZOS = { solid: "Continuo", dashed: "Rayado", dotted: "Punteado" };
+const RELLENOS = { no: "Sin relleno", suave: "Suave (color del trazo)", solido: "Sólido (color de fondo)" };
+/* El rayado se escala con el grosor para que no se empaste en trazos gruesos */
+function guiones(n) {
+  const g = Math.max(0.6, n.grosor || 1.4);
+  return n.trazo === "dashed" ? `${g * 5} ${g * 3.6}`
+       : n.trazo === "dotted" ? `${g} ${g * 2.6}` : "";
+}
 const MINUS = "−";
 
 function makeNode(type, x, y, extra) {
@@ -579,6 +628,13 @@ function makeNode(type, x, y, extra) {
   const n = Object.assign({ id: uid("n"), type, x, y, w: d.w, h: d.h,
     label: d.label, font: d.font || 14 }, JSON.parse(JSON.stringify(extra || {})));
   if (type === "sum") { n.signs = Object.assign({}, DEF.sum.signs, n.signs); n.cross = n.cross !== false; }
+  if (type === "marco") {
+    n.trazo = n.trazo || "dashed";
+    n.grosor = n.grosor || 1.4;
+    n.relleno = n.relleno || "no";
+    n.atras = !!n.atras;                 // arranca adelante: sin relleno no tapa nada
+    n.radio = n.radio === undefined ? 6 : n.radio;
+  }
   return n;
 }
 const getNode = (id) => S.nodes.find(n => n.id === id);
@@ -727,7 +783,8 @@ function routeAll() {
     const dA = dirOf(e.from.port), dB = dirOf(e.to.port);
     const Rf = rectOf(from), Rt = rectOf(to);
     const near = { l: Math.min(Rf.l, Rt.l), r: Math.max(Rf.r, Rt.r), t: Math.min(Rf.t, Rt.t), b: Math.max(Rf.b, Rt.b) };
-    const obstacles = S.nodes.filter(n => n.id !== from.id && n.id !== to.id && n.type !== "node" && n.type !== "text")
+    const obstacles = S.nodes.filter(n => n.id !== from.id && n.id !== to.id &&
+                                     n.type !== "node" && n.type !== "text" && n.type !== "marco")
                              .map(n => inflate(rectOf(n), 9));
     const keys = { from: e.from.id + ":" + e.from.port, to: e.to.id + ":" + e.to.port };
     let cands = candidates(A, dA, B, dB, near, all);
@@ -1011,7 +1068,7 @@ function dibujarMath(g, label, fs, cx, cy) {
 /* los bloques se agrandan solos para que la ecuación entre cómoda */
 function actualizarTamaños() {
   for (const n of S.nodes) {
-    if (n.type === "sum" || n.type === "node") continue;
+    if (n.type === "sum" || n.type === "node" || n.type === "marco") continue;
     const b = cajaEtiqueta(n.label, n.font);
     if (n.auto === false) continue;
     const esBloque = n.type === "block";
@@ -1021,10 +1078,17 @@ function actualizarTamaños() {
     if (n.w !== w || n.h !== h) { n.w = w; n.h = h; }
   }
 }
-function renderNode(n) {
+function renderNode(n, destino) {
   const g = el("g", { class: "node" + (S.sel.includes(n.id) ? " sel" : ""), "data-id": n.id,
-    style: estiloColor(n.color), transform: `translate(${n.x},${n.y})` }, gNodes);
-  if (n.type === "block") {
+    style: estiloColor(n.color), transform: `translate(${n.x},${n.y})` }, destino || gNodes);
+  if (n.type === "marco") {
+    el("rect", { class: "m-shape" + (n.relleno === "solido" ? " solido" : n.relleno === "suave" ? " suave" : ""),
+      x: -n.w / 2, y: -n.h / 2, width: n.w, height: n.h, rx: n.radio,
+      "stroke-width": n.grosor, "stroke-dasharray": guiones(n) }, g);
+    if (n.label)
+      el("text", { class: "m-label", x: -n.w / 2 + 9, y: -n.h / 2 + n.font, "font-size": n.font }, g)
+        .textContent = n.label;
+  } else if (n.type === "block") {
     el("rect", { class: "n-shape", x: -n.w / 2, y: -n.h / 2, width: n.w, height: n.h, rx: 0 }, g);
     dibujarMath(g, n.label, n.font, 0, 0);
   } else if (n.type === "sum") {
@@ -1119,6 +1183,7 @@ function renderPorts() {
   const list = (S.mode === "connect" || connecting) ? S.nodes
              : S.nodes.filter(n => ids.has(n.id) || n.id === hoverNode);
   for (const n of list) {
+    if (esMarco(n)) continue;                 // un recuadro no se cablea
     if (n.type === "node") {
       for (const p of ["l", "r", "t", "b"]) {
         const d = DIRS[p];
@@ -1139,12 +1204,15 @@ function render() {
   actualizarTamaños();
   routeAll();
   aplicarTema();
-  gEdges.textContent = ""; gNodes.textContent = ""; gOv.textContent = "";
+  gAtras.textContent = ""; gEdges.textContent = ""; gNodes.textContent = ""; gOv.textContent = "";
   viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
   $("#gridbg").style.display = S.showGrid ? "" : "none";
+  // los recuadros "atrás" van en su propia capa, debajo de flechas y elementos
+  for (const n of S.nodes) if (esMarco(n) && n.atras) renderNode(n, gAtras);
   for (const e of S.edges) renderEdge(e);
   for (const p of junctionDots()) el("circle", { class: "n-dot", cx: p.x, cy: p.y, r: 4.5 }, gEdges);
-  for (const n of S.nodes) renderNode(n);
+  for (const n of S.nodes) if (!esMarco(n)) renderNode(n);
+  for (const n of S.nodes) if (esMarco(n) && !n.atras) renderNode(n);
   renderHoja();
   renderPorts();
   if (drag && drag.kind === "connect" && drag.cur) {
@@ -1181,7 +1249,7 @@ function renderInspector() {
         <div class="row"><label>Fondo</label><div class="fill"><select id="p-grid">
           <option value="1">Grilla visible</option><option value="0">Hoja limpia</option></select></div></div>
         <div class="hint">La grilla no se exporta al SVG ni al PNG.</div>
-      </div>` + seccionHoja() + seccionTema();
+      </div>` + seccionHoja() + seccionTema() + seccionPaleta();
     const g = $("#p-grid"); g.value = S.showGrid ? "1" : "0";
     g.onchange = () => { S.showGrid = g.value === "1"; render(); };
     wireHoja(); wireTema();
@@ -1213,14 +1281,41 @@ function renderInspector() {
   }
   if (nsel.length) {
     const n = nsel[0];
-    const T = { block: "Bloque", sum: "Sumador", node: "Bifurcación", io: "Entrada / salida", text: "Texto" }[n.type];
+    const T = { block: "Bloque", sum: "Sumador", node: "Bifurcación", io: "Entrada / salida",
+                text: "Texto", marco: "Recuadro" }[n.type];
     h += `<div class="sec"><h3>${T}${nsel.length > 1 ? " (" + nsel.length + ")" : ""}</h3>`;
-    if (n.type !== "node") {
+    if (n.type === "marco") {
+      h += `<div class="row"><label>Título</label><div class="fill"><input type="text" id="n-label" value="${escapeHtml(n.label || "")}" placeholder="opcional, arriba a la izquierda"></div></div>
+        <div class="row"><label>Tamaño letra</label><div class="fill"><input type="number" id="n-font" min="8" max="40" value="${n.font}"></div></div>`;
+    } else if (n.type !== "node") {
       h += `<div class="row"><label>Contenido</label><div class="fill"><input type="text" id="n-label" value="${escapeHtml(n.label)}" placeholder="K/(s+1), G_1, C(s)…"></div></div>
         <div class="row"><label>Tamaño letra</label><div class="fill"><input type="number" id="n-font" min="8" max="40" value="${n.font}"></div></div>`;
     } else {
       h += `<div class="row"><label>Nombre</label><div class="fill"><input type="text" id="n-label" value="${escapeHtml(n.label || "")}" placeholder="opcional"></div></div>`;
     }
+    if (n.type === "marco") {
+      h += `<div class="hint">Sirve para encuadrar un grupo de elementos y ponerle nombre.
+        No se cablea ni desvía las flechas.</div></div>`;
+      const opts = (tabla, val) => Object.keys(tabla).map(k =>
+        `<option value="${k}"${k === val ? " selected" : ""}>${tabla[k]}</option>`).join("");
+      h += `<div class="sec"><h3>Recuadro</h3>
+        <div class="row"><label>Línea</label><div class="fill"><select id="m-trazo">${opts(TRAZOS, n.trazo)}</select></div></div>
+        <div class="row"><label>Grosor</label><div class="fill"><input type="number" id="m-grosor" step="0.2" min="0.4" max="8" value="${n.grosor}"></div></div>
+        <div class="row"><label>Relleno</label><div class="fill"><select id="m-relleno">${opts(RELLENOS, n.relleno)}</select></div></div>
+        <div class="row"><label>Orden</label><div class="fill"><select id="m-orden">
+          <option value="0"${n.atras ? "" : " selected"}>Adelante de los elementos</option>
+          <option value="1"${n.atras ? " selected" : ""}>Atrás de los elementos</option></select></div></div>
+        <div class="row"><label>Esquinas</label><div class="fill"><input type="number" id="m-radio" step="1" min="0" max="40" value="${n.radio}"></div></div>
+        <div class="grid4">
+          <div class="row"><label style="width:22px">An</label><div class="fill"><input type="number" id="n-w" step="10" min="20" value="${n.w}"></div></div>
+          <div class="row"><label style="width:22px">Al</label><div class="fill"><input type="number" id="n-h" step="10" min="20" value="${n.h}"></div></div>
+          <div class="row"><label style="width:22px">X</label><div class="fill"><input type="number" id="n-x" step="${S.grid}" value="${Math.round(n.x)}"></div></div>
+          <div class="row"><label style="width:22px">Y</label><div class="fill"><input type="number" id="n-y" step="${S.grid}" value="${Math.round(n.y)}"></div></div>
+        </div>
+        <div class="hint" style="margin-top:8px">Sin relleno lo agarrás por el borde y los clics de
+          adentro pasan a lo que haya debajo. Con relleno se agarra de cualquier parte.</div></div>`;
+    }
+    else
     h += `<div class="hint">Ecuaciones: las barras se apilan a cualquier profundidad —
       <b>(G_2/H_1)*(G_4/H_2)</b> da dos fracciones multiplicadas y <b>a/b/c</b> una sola con
       <b>b·c</b> abajo. Además <b>s^2</b> exponente, <b>H_2</b> o <b>H2</b> subíndice,
@@ -1238,7 +1333,7 @@ function renderInspector() {
         <div class="row"><label>Diámetro</label><div class="fill"><input type="number" id="n-w" min="20" max="120" step="2" value="${n.w}"></div></div>
         <div class="hint">Vacío = ese lado queda sin signo.</div>
       </div>`;
-    } else if (n.type === "block" || n.type === "io" || n.type === "text") {
+    } else if (n.type === "block" || n.type === "io" || n.type === "text") {   // el marco tiene su propia sección
       const auto = n.auto !== false, dis = auto ? " disabled" : "";
       h += `<div class="sec"><h3>Geometría</h3>
         <div class="row"><label>Tamaño</label><div class="fill"><select id="n-auto">
@@ -1260,16 +1355,60 @@ function renderInspector() {
       <button class="btn" id="n-snap">Imantar</button>
     </div></div>`;
   }
-  h += seccionHoja() + seccionTema();
+  h += seccionHoja() + seccionTema() + seccionPaleta();
   box.innerHTML = h;
   wireInspector(nsel, esel);
 }
 /* ---- colores: una sección para todo el diagrama y otra para el elemento elegido ---- */
 const clavesColor = (n) => n.type === "node" ? ["flecha"]
+  : n.type === "marco" ? ["borde", "relleno"]
   : (n.type === "text" || n.type === "io") ? ["texto"]
   : ["relleno", "borde", "texto"];
-const filaColor = (id, k, valor) =>
-  `<label for="${id}">${NOMBRE_COLOR[k]}</label><input type="color" class="swatch" id="${id}" value="${valor}">`;
+/* Una fila = el tirito de la paleta + el selector libre, todo apuntando al mismo id */
+function filaColor(id, k, valor) {
+  const v = String(valor || "").toLowerCase();
+  const muestras = paleta.map(c =>
+    `<button type="button" class="pcol${c === v ? " sel" : ""}" data-pal="${id}" data-c="${c}"
+      style="background:${c}" title="${NOMBRE_PALETA[c] || c}"></button>`).join("");
+  return `<label for="${id}">${NOMBRE_COLOR[k]}</label>
+    <div class="paleta">${muestras}<input type="color" class="swatch" id="${id}" value="${valor}"
+      title="Otro color"></div>`;
+}
+function seccionPaleta() {
+  const propios = paleta.filter(c => PALETA_BASE.indexOf(c) < 0);
+  return `<div class="sec"><h3>Mi paleta</h3><div class="paleta">` +
+    paleta.map(c => {
+      const fijo = PALETA_BASE.indexOf(c) >= 0;
+      return `<button type="button" class="pcol grande${fijo ? "" : " quitable"}" style="background:${c}"
+        title="${fijo ? (NOMBRE_PALETA[c] || c) : c + " — clic para sacarlo de la paleta"}"
+        ${fijo ? "" : `data-quitar="${c}"`}></button>`;
+    }).join("") +
+    `<input type="color" class="swatch" id="pal-add" value="#7c3aed" title="Agregar este color a la paleta">
+    </div>
+    <div class="hint" style="margin-top:8px">Negro, verde oscuro, azul, rojo y naranja vienen fijos.
+      Con el cuadradito de la derecha sumás el tuyo${propios.length ? ", y con un clic en uno agregado lo sacás" : ""}.
+      Quedan guardados en este navegador, no en el diagrama.</div></div>`;
+}
+function wirePaletaDe(id, aplicar) {
+  document.querySelectorAll(`[data-pal="${id}"]`).forEach(b => {
+    b.onclick = () => aplicar(b.dataset.c, true);
+  });
+  const e = document.getElementById(id);
+  if (!e) return;
+  e.addEventListener("input", () => aplicar(e.value, false));
+  e.addEventListener("change", () => aplicar(e.value, true));
+}
+function wirePaleta() {
+  const add = document.getElementById("pal-add");
+  if (add) add.addEventListener("change", () => {
+    const c = add.value.toLowerCase();
+    if (paleta.indexOf(c) < 0) { paleta.push(c); guardarPaleta(); render(); }
+  });
+  document.querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => {
+    paleta = paleta.filter(c => c !== b.dataset.quitar);
+    guardarPaleta(); render();
+  });
+}
 function seccionHoja() {
   const H = hojaActiva();
   let h = `<div class="sec"><h3>Área de impresión</h3>
@@ -1339,21 +1478,22 @@ function seccionColorPropio(o, pre, claves) {
       : "Todavía sigue los colores del diagrama. Tocá uno y se despega."}</div></div>`;
 }
 function wireTema() {
-  for (const k in TEMA_DEF) {
-    const e = document.getElementById("t-" + k); if (!e) continue;
-    e.addEventListener("input", () => lock(() => { S.tema[k] = e.value; render(); }));
-    e.addEventListener("change", () => { S.tema[k] = e.value; commit(); });
-  }
+  for (const k in TEMA_DEF)
+    wirePaletaDe("t-" + k, (v, definitivo) => {
+      if (definitivo) { S.tema[k] = v; commit(); render(); }
+      else lock(() => { S.tema[k] = v; render(); });
+    });
   const r = document.getElementById("t-reset");
   if (r) r.onclick = () => { S.tema = Object.assign({}, TEMA_DEF); commit(); render(); };
+  wirePaleta();
 }
 function wireColorPropio(pre, claves, objs) {
   const pintar = (k, v) => objs.forEach(o => { o.color = Object.assign({}, o.color); o.color[k] = v; });
-  for (const k of claves) {
-    const e = document.getElementById(pre + k); if (!e) continue;
-    e.addEventListener("input", () => lock(() => { pintar(k, e.value); render(); }));
-    e.addEventListener("change", () => { pintar(k, e.value); commit(); render(); });
-  }
+  for (const k of claves)
+    wirePaletaDe(pre + k, (v, definitivo) => {
+      if (definitivo) { pintar(k, v); commit(); render(); }
+      else lock(() => { pintar(k, v); render(); });
+    });
   const r = document.getElementById(pre + "reset");
   if (r) r.onclick = () => { objs.forEach(o => delete o.color); commit(); render(); };
 }
@@ -1375,8 +1515,8 @@ function wireInspector(nsel, esel) {
   };
   live("n-label", v => nsel.forEach(n => n.label = v));
   live("n-font", v => nsel.forEach(n => n.font = +v || 14));
-  live("n-w", v => nsel.forEach(n => { n.w = +v || n.w; if (n.type === "sum") n.h = n.w; else n.auto = false; }));
-  live("n-h", v => nsel.forEach(n => { n.h = +v || n.h; n.auto = false; }));
+  live("n-w", v => nsel.forEach(n => { n.w = +v || n.w; if (n.type === "sum") n.h = n.w; else if (!esMarco(n)) n.auto = false; }));
+  live("n-h", v => nsel.forEach(n => { n.h = +v || n.h; if (!esMarco(n)) n.auto = false; }));
   live("n-x", v => nsel.forEach(n => n.x = +v));
   live("n-y", v => nsel.forEach(n => n.y = +v));
   const autoSel = document.getElementById("n-auto");
@@ -1384,6 +1524,17 @@ function wireInspector(nsel, esel) {
     nsel.forEach(n => n.auto = autoSel.value === "1");
     commit(); render();
   };
+  // recuadro: línea, grosor, relleno y en qué capa va
+  const sel = (id, fn) => {
+    const e = document.getElementById(id);
+    if (e) e.onchange = () => { nsel.forEach(n => fn(n, e.value)); commit(); render(); };
+  };
+  sel("m-trazo", (n, v) => n.trazo = v);
+  sel("m-relleno", (n, v) => n.relleno = v);
+  sel("m-orden", (n, v) => n.atras = v === "1");
+  live("m-grosor", v => nsel.forEach(n => n.grosor = Math.min(8, Math.max(0.4, +v || 1.4))));
+  live("m-radio", v => nsel.forEach(n => n.radio = Math.min(40, Math.max(0, +v || 0))));
+
   const cross = document.getElementById("s-cross");
   if (cross) { cross.value = nsel[0].cross ? "1" : "0"; cross.onchange = () => { nsel.forEach(n => n.cross = cross.value === "1"); commit(); render(); }; }
   document.querySelectorAll(".sgn").forEach(sel => {
@@ -1482,7 +1633,7 @@ svg.addEventListener("pointerdown", ev => {
   // nodo
   const nid = hitNode(t);
   if (nid) {
-    if (S.mode === "connect") {
+    if (S.mode === "connect" && !esMarco(getNode(nid))) {
       const n = getNode(nid);
       const port = nearestPort(n, w);
       drag = { kind: "connect", fromId: nid, fromPort: port, start: portPoint(n, port), cur: w };
@@ -1546,7 +1697,7 @@ svg.addEventListener("pointerup", ev => {
       targetId = t.getAttribute("data-pid"); targetPort = t.getAttribute("data-port");
     } else {
       const nid = t ? hitNode(t) : null;
-      if (nid) { targetId = nid; targetPort = nearestPort(getNode(nid), w, getNode(drag.fromId)); }
+      if (nid && !esMarco(getNode(nid))) { targetId = nid; targetPort = nearestPort(getNode(nid), w, getNode(drag.fromId)); }
       else {
         // soltar en el vacío = crear bifurcación ahí y conectar
         const nn = makeNode("node", snapV(w.x), snapV(w.y));
@@ -1741,6 +1892,10 @@ function buildExportSVG() {
     .n-bar{stroke:var(--c-texto);stroke-width:1.4;fill:none}
     .n-paren{stroke:var(--c-texto);stroke-width:1.25;fill:none;stroke-linecap:round}
     .n-cross{stroke:var(--c-borde);stroke-width:1.4;fill:none}
+    .m-shape{fill:none;stroke:var(--c-borde);stroke-linejoin:round}
+    .m-shape.solido{fill:var(--c-relleno)}
+    .m-shape.suave{fill:var(--c-borde);fill-opacity:.1}
+    .m-label{font-family:Arial,Helvetica,sans-serif;fill:var(--c-borde);text-anchor:start;dominant-baseline:central}
     .n-dot{fill:var(--c-flecha)}
     .edge{stroke:var(--c-flecha);stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
     .edge.dashed{stroke-dasharray:6 4}.e-label-bg{fill:var(--c-fondo)}`;
@@ -1751,9 +1906,9 @@ function buildExportSVG() {
   s.appendChild(bg);
   const selN = S.sel, selE = S.selEdges;
   S.sel = []; S.selEdges = []; render();
-  const ge = gEdges.cloneNode(true), gn = gNodes.cloneNode(true);
+  const ga = gAtras.cloneNode(true), ge = gEdges.cloneNode(true), gn = gNodes.cloneNode(true);
   ge.querySelectorAll(".edge-hit").forEach(x => x.remove());
-  s.appendChild(ge); s.appendChild(gn);
+  s.appendChild(ga); s.appendChild(ge); s.appendChild(gn);
   S.sel = selN; S.selEdges = selE; render();
   return { svg: s, W, H };
 }
@@ -1888,6 +2043,7 @@ window.addEventListener("keydown", ev => {
   if (k === "n") return setPending("node");
   if (k === "e") return setPending("io");
   if (k === "t") return setPending("text");
+  if (k === "m") return setPending("marco");
   if (k === "f") return fit();
   if (k === "?") return $("#ov-help").classList.add("show");
   if (ev.key.startsWith("Arrow") && S.sel.length) {
