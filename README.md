@@ -1,3 +1,5 @@
+<img src="uni-tools-logo.png" alt="uni-tools — Simulación y creación de diagramas lógicos, de bloques y de señales" width="480">
+
 # uni-tools
 Repo de opciones para la cursada en la facu. Plantear circuitos, apuntes, y no se, lo que me pinte
 
