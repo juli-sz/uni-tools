@@ -139,6 +139,15 @@ table.tt td.edit:hover{background:var(--accent-soft);color:var(--accent)}
 .expr b{color:var(--accent)}
 .help td{padding:5px 0;border-bottom:1px solid var(--line-2);vertical-align:top;text-align:left;font-family:var(--ui)}
 .help td:first-child{width:150px;white-space:nowrap}
+/* elegir archivo para abrir */
+.filebox{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);
+  border-radius:10px;padding:16px}
+.filebox .nom{font-family:var(--mono);font-size:11.5px;color:#8a97a5;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal details{margin-top:16px}
+.modal summary{cursor:pointer;font-size:12px;color:var(--ink-2);user-select:none;padding:4px 0}
+.modal summary:hover{color:var(--ink)}
+.modal details textarea{margin-top:8px}
 textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
   border-radius:8px;padding:8px;resize:vertical}
 /* dibujo
@@ -278,6 +287,8 @@ svg#canvas{
 
   <div class="group collapsed">
     <span class="glab">Archivo</span>
+    <input type="text" id="b-nombre" style="width:136px" placeholder="nombre del archivo"
+           title="Con este nombre se descargan el SVG, el PNG y el JSON">
     <select id="b-hoja" style="width:128px" title="Área de impresión: marca en la hoja lo que va a entrar en el SVG y en el PNG"></select>
     <button class="btn ghost" id="b-svg">SVG</button>
     <button class="btn ghost" id="b-png">PNG</button>
@@ -357,11 +368,20 @@ svg#canvas{
 
 <div class="overlay" id="ov-io"><div class="modal">
   <h2>Abrir circuito</h2>
-  <p class="sub">Pegá el JSON de un circuito guardado.</p>
-  <textarea id="io-text" spellcheck="false"></textarea>
+  <p class="sub">Un <b>.json</b> guardado desde acá, o un <b>.svg</b> exportado desde acá:
+    el SVG se lleva los datos del circuito adentro, así que se puede volver a abrir y editar.</p>
+  <div class="filebox">
+    <button class="btn on" id="io-file-btn">Elegir archivo…</button>
+    <span class="nom" id="io-file-nom">Ningún archivo elegido</span>
+  </div>
+  <input type="file" id="io-file" accept=".json,.svg,application/json,image/svg+xml" hidden>
+  <details>
+    <summary>o pegar el JSON a mano</summary>
+    <textarea id="io-text" spellcheck="false" placeholder='{ "nodes": [...], "wires": [...] }'></textarea>
+  </details>
   <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
     <button class="btn" id="io-cancel">Cancelar</button>
-    <button class="btn on" id="io-ok">Cargar</button>
+    <button class="btn on" id="io-ok">Cargar lo pegado</button>
   </div>
 </div></div>
 
@@ -511,7 +531,55 @@ const inX  = (n) => -bodyW(n) / 2 - STUB;
 let uidc = 1; const uid = (p) => p + (uidc++);
 let S = { nodes: [], wires: [], sel: [], selW: [], snap: true, grid: 20,
   showGrid: true, zoom: 1, pan: { x: 80, y: 60 }, tema: null,
-  hoja: null };                       // área de impresión: null = se exporta lo que haya
+  hoja: null,                         // área de impresión: null = se exporta lo que haya
+  nombre: "circuito" };               // con este nombre se descargan el SVG, el PNG y el JSON
+const NOMBRE_DEF = "circuito";
+/* Un nombre de archivo que no incomode a ningún sistema operativo */
+function limpiarNombre(s) {
+  const t = String(s || "").replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
+  return t || NOMBRE_DEF;
+}
+const nombreArchivo = (ext) => limpiarNombre(S.nombre) + "." + ext;
+/* El circuito entero, tal como se guarda en el JSON y como viaja adentro del SVG */
+const docDatos = () => ({ nombre: limpiarNombre(S.nombre), nodes: S.nodes,
+  wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, variant: w.variant, color: w.color })),
+  tema: S.tema, hoja: S.hoja });
+function cargarDoc(d, desdeArchivo) {
+  S.nodes = d.nodes || [];
+  S.wires = (d.wires || []).map(w => Object.assign({ variant: 0 }, w));
+  S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
+  S.hoja = d.hoja || null;
+  S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
+  S.nodes.forEach(n => { if (n.type === "ff") n.clkArranque = false; });
+  uidc = S.nodes.length + S.wires.length + 100;
+  S.sel = []; S.selW = []; VAL = new Map();
+}
+/* Los SVG exportados llevan el circuito adentro, en <metadata>, así que se
+   pueden volver a abrir. Los exportados antes de esto no lo tienen. */
+function datosDeSVG(txt) {
+  const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+  if (doc.querySelector("parsererror")) throw new Error("no es un SVG válido");
+  const m = doc.querySelector("metadata#uni-tools-datos");
+  if (!m || !m.textContent.trim()) throw new Error("ese SVG no trae los datos del circuito");
+  return JSON.parse(m.textContent);
+}
+function abrirTexto(txt, nombreDelArchivo) {
+  const t = String(txt || "").trim();
+  if (!t) return toast("No hay nada para abrir");
+  let d;
+  try {
+    d = t[0] === "{" ? JSON.parse(t) : datosDeSVG(t);
+  } catch (e) {
+    return toast(/metadata|datos/.test(e.message)
+      ? "Ese SVG no trae los datos del circuito: se exportó con una versión anterior"
+      : "Ese archivo no se pudo leer");
+  }
+  if (!d || !Array.isArray(d.nodes)) return toast("Ese archivo no tiene un circuito adentro");
+  cargarDoc(d, nombreDelArchivo && nombreDelArchivo.replace(/\.(json|svg)$/i, ""));
+  commit(); fit();
+  $("#ov-io").classList.remove("show");
+  toast("Circuito cargado");
+}
 let VAL = new Map(), OSC = false;
 
 /* Colores del circuito. Cada compuerta o cable puede pisar los que quiera en su .color */
@@ -1200,6 +1268,7 @@ function render() {
     : sueltas ? `<span class="k">entradas sin conectar</span> ${sueltas}` : "";
   $("#zoomlab").textContent = Math.round(S.zoom * 100) + "%";
   $("#b-hoja").value = S.hoja ? S.hoja.preset : "";
+  if (document.activeElement !== $("#b-nombre")) $("#b-nombre").value = S.nombre || "";
   $("#b-undo").disabled = !undoStack.length;
   $("#b-redo").disabled = !redoStack.length;
   renderInspector();
@@ -1539,12 +1608,13 @@ function wireInspector(nsel, wsel) {
 
 /* ======================= historial ======================= */
 let undoStack = [], redoStack = [], lastSnap = null;
-const snapshot = () => JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, variant: w.variant, color: w.color })), tema: S.tema, hoja: S.hoja, uidc });
+const snapshot = () => JSON.stringify(Object.assign(docDatos(), { uidc }));
 function restore(js) {
   const d = JSON.parse(js);
   S.nodes = d.nodes; S.wires = d.wires; uidc = d.uidc || uidc;
   S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
   S.hoja = d.hoja || null;
+  S.nombre = d.nombre || S.nombre;
   S.sel = S.sel.filter(getNode); S.selW = S.selW.filter(getWire);
 }
 function commit() {
@@ -1964,6 +2034,11 @@ function buildExportSVG() {
   const s = document.createElementNS(NS, "svg");
   s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
+  // el circuito viaja adentro del SVG para poder volver a abrirlo desde acá
+  const meta = document.createElementNS(NS, "metadata");
+  meta.setAttribute("id", "uni-tools-datos");
+  meta.textContent = JSON.stringify(docDatos());
+  s.appendChild(meta);
   const st = document.createElementNS(NS, "style");
   // las variables van en la raíz: los estilos sueltos que quedaron con var() las resuelven acá
   st.textContent = `svg{${Object.keys(TEMA_DEF).map(k => `--c-${k}:${temaDe(k)}`).join(";")}}`;
@@ -1989,7 +2064,7 @@ function download(name, blob) {
 }
 $("#b-svg").onclick = () => {
   if (!S.nodes.length) return toast("El circuito está vacío");
-  download("circuito.svg", new Blob([new XMLSerializer().serializeToString(buildExportSVG().svg)], { type: "image/svg+xml" }));
+  download(nombreArchivo("svg"), new Blob([new XMLSerializer().serializeToString(buildExportSVG().svg)], { type: "image/svg+xml" }));
   toast("SVG descargado");
 };
 $("#b-png").onclick = () => {
@@ -2002,29 +2077,32 @@ $("#b-png").onclick = () => {
     const ctx = c.getContext("2d");
     ctx.fillStyle = temaDe("fondo"); ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0, c.width, c.height);
-    c.toBlob(bl => { download("circuito.png", bl); toast("PNG descargado (3×)"); });
+    c.toBlob(bl => { download(nombreArchivo("png"), bl); toast("PNG descargado (3×)"); });
   };
   img.onerror = () => toast("No se pudo generar el PNG");
   img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s))));
 };
 $("#b-save").onclick = () => {
-  download("circuito.json", new Blob([JSON.stringify({ nodes: S.nodes, wires: S.wires.map(w => ({ id: w.id, from: w.from, to: w.to, color: w.color })), tema: S.tema, hoja: S.hoja }, null, 1)], { type: "application/json" }));
+  download(nombreArchivo("json"), new Blob([JSON.stringify(docDatos(), null, 1)], { type: "application/json" }));
   toast("Circuito guardado");
 };
-$("#b-open").onclick = () => { $("#io-text").value = ""; $("#ov-io").classList.add("show"); $("#io-text").focus(); };
-$("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
-$("#io-ok").onclick = () => {
-  try {
-    const d = JSON.parse($("#io-text").value);
-    S.nodes = d.nodes || []; S.wires = (d.wires || []).map(w => Object.assign({ variant: 0 }, w));
-    S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
-    S.hoja = d.hoja || null;
-    S.nodes.forEach(n => { if (n.type === "ff") n.clkArranque = false; });
-    uidc = S.nodes.length + S.wires.length + 100;
-    S.sel = []; S.selW = []; VAL = new Map(); commit(); fit();
-    $("#ov-io").classList.remove("show"); toast("Circuito cargado");
-  } catch (e) { toast("Ese JSON no se pudo leer"); }
+$("#b-open").onclick = () => {
+  $("#io-text").value = ""; $("#io-file").value = "";
+  $("#io-file-nom").textContent = "Ningún archivo elegido";
+  $("#ov-io").classList.add("show");
 };
+$("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
+$("#io-file-btn").onclick = () => $("#io-file").click();
+$("#io-file").onchange = (ev) => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  $("#io-file-nom").textContent = f.name;
+  const r = new FileReader();
+  r.onload = () => abrirTexto(r.result, f.name);
+  r.onerror = () => toast("No se pudo leer el archivo");
+  r.readAsText(f);
+};
+$("#io-ok").onclick = () => abrirTexto($("#io-text").value);
 
 /* ======================= barra ======================= */
 $("#b-undo").onclick = undo; $("#b-redo").onclick = redo;
@@ -2036,6 +2114,16 @@ $("#b-gridshow").onclick = () => { S.showGrid = !S.showGrid; render(); };
 $("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
 $("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
 $("#b-fit").onclick = fit;
+// nombre del archivo: se usa para el SVG, el PNG y el JSON
+$("#b-nombre").addEventListener("input", () => {
+  S.nombre = $("#b-nombre").value;
+  document.title = limpiarNombre(S.nombre) + " · Simulador de circuitos lógicos";
+});
+$("#b-nombre").addEventListener("change", () => {
+  S.nombre = limpiarNombre($("#b-nombre").value);
+  $("#b-nombre").value = S.nombre; commit();
+});
+$("#b-nombre").addEventListener("keydown", ev => ev.stopPropagation());
 // selector de área de impresión
 $("#b-hoja").innerHTML = `<option value="">Sin área fija</option>` +
   Object.keys(HOJAS).map(k => `<option value="${k}">${HOJAS[k].nombre}</option>`).join("");

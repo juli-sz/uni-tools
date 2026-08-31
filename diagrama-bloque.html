@@ -133,6 +133,16 @@ kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line
 .modal td:first-child{width:130px;white-space:nowrap}
 textarea{width:100%;height:200px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
   border-radius:8px;padding:8px;resize:vertical}
+/* elegir archivo para abrir */
+.filebox{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);
+  border-radius:10px;padding:16px}
+.filebox .nom{font-family:var(--mono);font-size:11.5px;color:#8a97a5;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal details{margin-top:16px}
+.modal summary{cursor:pointer;font-size:12px;color:var(--ink-2);user-select:none;
+  padding:4px 0}
+.modal summary:hover{color:var(--ink)}
+.modal details textarea{margin-top:8px}
 /* ---------- svg drawing ----------
    Los colores salen de variables CSS puestas en el <svg>. Un elemento con color
    propio redefine la variable en su propio <g> y sus hijos la heredan. */
@@ -287,6 +297,8 @@ svg#canvas{
 
   <div class="group collapsed">
     <span class="glab">Archivo</span>
+    <input type="text" id="b-nombre" style="width:136px" placeholder="nombre del archivo"
+           title="Con este nombre se descargan el SVG, el PNG y el JSON">
     <select id="b-hoja" style="width:128px" title="Área de impresión: marca en la hoja lo que va a entrar en el SVG y en el PNG"></select>
     <button class="btn ghost" id="b-example" title="Cargar diagrama de ejemplo">Ejemplo</button>
     <button class="btn ghost" id="b-clear" title="Vaciar la hoja">Vaciar</button>
@@ -386,11 +398,20 @@ svg#canvas{
 
 <div class="overlay" id="ov-io"><div class="modal">
   <h2 id="io-title">Abrir diagrama</h2>
-  <p class="sub" id="io-sub">Pegá acá el JSON de un diagrama guardado.</p>
-  <textarea id="io-text" spellcheck="false"></textarea>
+  <p class="sub" id="io-sub">Un <b>.json</b> guardado desde acá, o un <b>.svg</b> exportado desde acá:
+    el SVG se lleva los datos del diagrama adentro, así que se puede volver a abrir y editar.</p>
+  <div class="filebox">
+    <button class="btn on" id="io-file-btn">Elegir archivo…</button>
+    <span class="nom" id="io-file-nom">Ningún archivo elegido</span>
+  </div>
+  <input type="file" id="io-file" accept=".json,.svg,application/json,image/svg+xml" hidden>
+  <details>
+    <summary>o pegar el JSON a mano</summary>
+    <textarea id="io-text" spellcheck="false" placeholder='{ "nodes": [...], "edges": [...] }'></textarea>
+  </details>
   <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
     <button class="btn" id="io-cancel">Cancelar</button>
-    <button class="btn on" id="io-ok">Cargar</button>
+    <button class="btn on" id="io-ok">Cargar lo pegado</button>
   </div>
 </div></div>
 
@@ -414,8 +435,53 @@ let S = {
   zoom: 1,
   pan: { x: 60, y: 40 },
   tema: null,                // se completa abajo con TEMA_DEF
-  hoja: null                 // área de impresión: null = se exporta lo que haya
+  hoja: null,                // área de impresión: null = se exporta lo que haya
+  nombre: "diagrama-bloques" // con este nombre se descargan el SVG, el PNG y el JSON
 };
+const NOMBRE_DEF = "diagrama-bloques";
+/* Un nombre de archivo que no incomode a ningún sistema operativo */
+function limpiarNombre(s) {
+  const t = String(s || "").replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
+  return t || NOMBRE_DEF;
+}
+const nombreArchivo = (ext) => limpiarNombre(S.nombre) + "." + ext;
+/* El documento entero, tal como se guarda en el JSON y como viaja adentro del SVG */
+const docDatos = () => ({ nombre: limpiarNombre(S.nombre), nodes: S.nodes, edges: S.edges,
+                          tema: S.tema, hoja: S.hoja });
+function cargarDoc(d, desdeArchivo) {
+  S.nodes = d.nodes || []; S.edges = d.edges || [];
+  S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
+  S.hoja = d.hoja || null;
+  S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
+  uidc = S.nodes.length + S.edges.length + 100;
+  S.sel = []; S.selEdges = [];
+}
+/* Los SVG exportados llevan el diagrama adentro, en <metadata>, así que se
+   pueden volver a abrir. Los exportados antes de esto no lo tienen. */
+function datosDeSVG(txt) {
+  const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+  if (doc.querySelector("parsererror")) throw new Error("no es un SVG válido");
+  const m = doc.querySelector("metadata#uni-tools-datos");
+  if (!m || !m.textContent.trim()) throw new Error("ese SVG no trae los datos del diagrama");
+  return JSON.parse(m.textContent);
+}
+function abrirTexto(txt, nombreDelArchivo) {
+  const t = String(txt || "").trim();
+  if (!t) return toast("No hay nada para abrir");
+  let d;
+  try {
+    d = t[0] === "{" ? JSON.parse(t) : datosDeSVG(t);
+  } catch (e) {
+    return toast(/metadata|datos/.test(e.message)
+      ? "Ese SVG no trae los datos del diagrama: se exportó con una versión anterior"
+      : "Ese archivo no se pudo leer");
+  }
+  if (!d || !Array.isArray(d.nodes)) return toast("Ese archivo no tiene un diagrama adentro");
+  cargarDoc(d, nombreDelArchivo && nombreDelArchivo.replace(/\.(json|svg)$/i, ""));
+  commit(); fit(); render();
+  $("#ov-io").classList.remove("show");
+  toast("Diagrama cargado");
+}
 /* Colores del diagrama. Cada elemento puede pisar los que quiera en su propio .color */
 const TEMA_DEF = { relleno: "#ffffff", borde: "#101418", texto: "#101418",
                    flecha: "#101418", fondo: "#ffffff" };
@@ -1092,6 +1158,7 @@ function render() {
   $("#st-s").textContent = (S.sel.length + S.selEdges.length) ? (S.sel.length + " elem · " + S.selEdges.length + " flechas") : "—";
   $("#zoomlab").textContent = Math.round(S.zoom * 100) + "%";
   $("#b-hoja").value = S.hoja ? S.hoja.preset : "";
+  if (document.activeElement !== $("#b-nombre")) $("#b-nombre").value = S.nombre || "";
   $("#b-undo").disabled = !undoStack.length;
   $("#b-redo").disabled = !redoStack.length;
   renderInspector();
@@ -1345,12 +1412,13 @@ function wireInspector(nsel, esel) {
 
 /* ======================= historial ======================= */
 let undoStack = [], redoStack = [];
-const snapshot = () => JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema, hoja: S.hoja, uidc });
+const snapshot = () => JSON.stringify(Object.assign(docDatos(), { uidc }));
 function restore(js) {
   const d = JSON.parse(js);
   S.nodes = d.nodes; S.edges = d.edges; uidc = d.uidc || uidc;
   S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
   S.hoja = d.hoja || null;
+  S.nombre = d.nombre || S.nombre;
   S.sel = S.sel.filter(id => getNode(id)); S.selEdges = S.selEdges.filter(id => getEdge(id));
 }
 let lastSnap = null;
@@ -1652,6 +1720,11 @@ function buildExportSVG() {
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
   // una punta de flecha por cada color que se esté usando, igual que en la hoja
   const colores = Array.from(new Set(S.edges.map(e => colorEfectivo(e, "flecha"))));
+  // el diagrama viaja adentro del SVG para poder volver a abrirlo desde acá
+  const meta = document.createElementNS(NS, "metadata");
+  meta.setAttribute("id", "uni-tools-datos");
+  meta.textContent = JSON.stringify(docDatos());
+  s.appendChild(meta);
   const defs = document.createElementNS(NS, "defs");
   defs.innerHTML = colores.map(c =>
     `<marker id="${idMarcador(c)}" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
@@ -1690,7 +1763,7 @@ function download(name, blob) {
 $("#b-svg").onclick = () => {
   if (!S.nodes.length) return toast("La hoja está vacía");
   const { svg: s } = buildExportSVG();
-  download("diagrama-bloques.svg", new Blob([new XMLSerializer().serializeToString(s)], { type: "image/svg+xml" }));
+  download(nombreArchivo("svg"), new Blob([new XMLSerializer().serializeToString(s)], { type: "image/svg+xml" }));
   toast("SVG descargado");
 };
 $("#b-png").onclick = () => {
@@ -1704,30 +1777,32 @@ $("#b-png").onclick = () => {
     const ctx = c.getContext("2d");
     ctx.fillStyle = temaDe("fondo"); ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0, c.width, c.height);
-    c.toBlob(bl => { download("diagrama-bloques.png", bl); toast("PNG descargado (3×)"); });
+    c.toBlob(bl => { download(nombreArchivo("png"), bl); toast("PNG descargado (3×)"); });
   };
   img.onerror = () => toast("No se pudo generar el PNG");
   img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(str)));
 };
 $("#b-save").onclick = () => {
-  download("diagrama-bloques.json", new Blob([JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema, hoja: S.hoja }, null, 1)], { type: "application/json" }));
+  download(nombreArchivo("json"), new Blob([JSON.stringify(docDatos(), null, 1)], { type: "application/json" }));
   toast("Diagrama guardado");
 };
 $("#b-open").onclick = () => {
-  $("#io-text").value = ""; $("#ov-io").classList.add("show"); $("#io-text").focus();
+  $("#io-text").value = ""; $("#io-file").value = "";
+  $("#io-file-nom").textContent = "Ningún archivo elegido";
+  $("#ov-io").classList.add("show");
 };
 $("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
-$("#io-ok").onclick = () => {
-  try {
-    const d = JSON.parse($("#io-text").value);
-    S.nodes = d.nodes || []; S.edges = d.edges || [];
-    S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
-    S.hoja = d.hoja || null;
-    uidc = S.nodes.length + S.edges.length + 100;
-    S.sel = []; S.selEdges = []; commit(); fit(); render();
-    $("#ov-io").classList.remove("show"); toast("Diagrama cargado");
-  } catch (err) { toast("Ese JSON no se pudo leer"); }
+$("#io-file-btn").onclick = () => $("#io-file").click();
+$("#io-file").onchange = (ev) => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  $("#io-file-nom").textContent = f.name;
+  const r = new FileReader();
+  r.onload = () => abrirTexto(r.result, f.name);
+  r.onerror = () => toast("No se pudo leer el archivo");
+  r.readAsText(f);
 };
+$("#io-ok").onclick = () => abrirTexto($("#io-text").value);
 
 /* ======================= barra superior ======================= */
 $("#m-select").onclick = () => setMode("select");
@@ -1765,6 +1840,16 @@ $("#b-snapall").onclick = () => {
 $("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
 $("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
 $("#b-fit").onclick = fit;
+// nombre del archivo: se usa para el SVG, el PNG y el JSON
+$("#b-nombre").addEventListener("input", () => {
+  S.nombre = $("#b-nombre").value;
+  document.title = (limpiarNombre(S.nombre)) + " · Editor de diagramas de bloques";
+});
+$("#b-nombre").addEventListener("change", () => {
+  S.nombre = limpiarNombre($("#b-nombre").value);
+  $("#b-nombre").value = S.nombre; commit();
+});
+$("#b-nombre").addEventListener("keydown", ev => ev.stopPropagation());
 // selector de área de impresión
 $("#b-hoja").innerHTML = `<option value="">Sin área fija</option>` +
   Object.keys(HOJAS).map(k => `<option value="${k}">${HOJAS[k].nombre}</option>`).join("");
