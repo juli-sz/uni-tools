@@ -133,18 +133,25 @@ kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line
 .modal td:first-child{width:130px;white-space:nowrap}
 textarea{width:100%;height:200px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
   border-radius:8px;padding:8px;resize:vertical}
-/* ---------- svg drawing ---------- */
-.n-shape{fill:var(--paper);stroke:#101418;stroke-width:1.6}
-.n-label{font-family:var(--draw);fill:#101418;text-anchor:middle;dominant-baseline:central;
+/* ---------- svg drawing ----------
+   Los colores salen de variables CSS puestas en el <svg>. Un elemento con color
+   propio redefine la variable en su propio <g> y sus hijos la heredan. */
+svg#canvas{
+  --c-relleno:#ffffff; --c-borde:#101418; --c-texto:#101418;
+  --c-flecha:#101418; --c-fondo:#ffffff;
+}
+.n-shape{fill:var(--c-relleno);stroke:var(--c-borde);stroke-width:1.6}
+.n-label{font-family:var(--draw);fill:var(--c-texto);text-anchor:middle;dominant-baseline:central;
   pointer-events:none;user-select:none}
-.n-math{font-family:var(--draw);fill:#101418;text-anchor:start;dominant-baseline:central;
+.n-math{font-family:var(--draw);fill:var(--c-texto);text-anchor:start;dominant-baseline:central;
   pointer-events:none;user-select:none;white-space:pre}
-.n-bar{stroke:#101418;stroke-width:1.4;fill:none}
-.n-paren{stroke:#101418;stroke-width:1.25;fill:none;stroke-linecap:round}
-.n-sign{font-family:var(--draw);fill:#101418;text-anchor:middle;dominant-baseline:central;
+.n-bar{stroke:var(--c-texto);stroke-width:1.4;fill:none}
+.n-paren{stroke:var(--c-texto);stroke-width:1.25;fill:none;stroke-linecap:round}
+.n-sign{font-family:var(--draw);fill:var(--c-texto);text-anchor:middle;dominant-baseline:central;
   pointer-events:none;user-select:none;font-size:13px}
-.n-cross{stroke:#101418;stroke-width:1.4;fill:none}
-.edge{stroke:#101418;stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.n-cross{stroke:var(--c-borde);stroke-width:1.4;fill:none}
+.n-dot{fill:var(--c-flecha)}
+.edge{stroke:var(--c-flecha);stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
 .edge.dashed{stroke-dasharray:6 4}
 .edge-hit{stroke:transparent;stroke-width:14;fill:none;cursor:pointer}
 .sel .n-shape{stroke:var(--accent)}
@@ -160,9 +167,16 @@ textarea{width:100%;height:200px;font-family:var(--mono);font-size:11px;border:1
 #canvas.split-mode g:hover>.edge{stroke-width:3.4}
 .band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
 .ghostline{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 4;fill:none;pointer-events:none}
-.e-label{font-family:var(--draw);font-size:11px;fill:#101418;text-anchor:middle;
+.e-label{font-family:var(--draw);font-size:11px;fill:var(--c-texto);text-anchor:middle;
   dominant-baseline:central;pointer-events:none}
-.e-label-bg{fill:var(--paper)}
+.e-label-bg{fill:var(--c-fondo)}
+/* muestras de color del panel */
+.swatch{width:100%;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;
+  background:none;cursor:pointer}
+.swatch::-webkit-color-swatch-wrapper{padding:2px}
+.swatch::-webkit-color-swatch{border:none;border-radius:4px}
+.cgrid{display:grid;grid-template-columns:64px 1fr;gap:6px 8px;align-items:center}
+.cgrid label{font-size:11.5px;color:var(--ink-2)}
 
 /* ---------- Toggles de UI (Navbar y Panel) ---------- */
 #inspector { 
@@ -391,8 +405,38 @@ let S = {
   grid: 20,
   showGrid: true,
   zoom: 1,
-  pan: { x: 60, y: 40 }
+  pan: { x: 60, y: 40 },
+  tema: null                 // se completa abajo con TEMA_DEF
 };
+/* Colores del diagrama. Cada elemento puede pisar los que quiera en su propio .color */
+const TEMA_DEF = { relleno: "#ffffff", borde: "#101418", texto: "#101418",
+                   flecha: "#101418", fondo: "#ffffff" };
+const NOMBRE_COLOR = { relleno: "Relleno", borde: "Contorno", texto: "Letras",
+                       flecha: "Flechas", fondo: "Fondo" };
+S.tema = Object.assign({}, TEMA_DEF);
+const temaDe = (k) => (S.tema && S.tema[k]) || TEMA_DEF[k];
+/* Un color propio se aplica redefiniendo la variable CSS en el <g> del elemento:
+   todo lo que cuelga adentro la hereda sin tocar el resto del dibujo. */
+const estiloColor = (c) => !c ? "" :
+  Object.keys(c).filter(k => c[k]).map(k => `--c-${k}:${c[k]}`).join(";");
+const colorEfectivo = (o, k) => (o && o.color && o.color[k]) || temaDe(k);
+function aplicarTema() {
+  for (const k in TEMA_DEF) svg.style.setProperty("--c-" + k, temaDe(k));
+  $("#stage").style.background = temaDe("fondo");
+}
+/* Las puntas de flecha viven en <defs> y no heredan el color de cada flecha,
+   así que hay un marcador por color, creado a medida que hace falta. */
+const idMarcador = (color) => "arrow-" + color.replace(/[^0-9a-zA-Z]/g, "");
+function markerPara(color) {
+  const id = idMarcador(color);
+  if (!svg.querySelector("#" + id)) {
+    const m = el("marker", { id, viewBox: "0 0 10 10", refX: 9.2, refY: 5,
+      markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse", markerUnits: "strokeWidth" },
+      svg.querySelector("defs"));
+    el("path", { d: "M0.5 1.2 L9.5 5 L0.5 8.8 z", fill: color }, m);
+  }
+  return `url(#${id})`;
+}
 let uidc = 1;
 const uid = (p) => p + (uidc++);
 
@@ -854,7 +898,7 @@ function actualizarTamaños() {
 }
 function renderNode(n) {
   const g = el("g", { class: "node" + (S.sel.includes(n.id) ? " sel" : ""), "data-id": n.id,
-    transform: `translate(${n.x},${n.y})` }, gNodes);
+    style: estiloColor(n.color), transform: `translate(${n.x},${n.y})` }, gNodes);
   if (n.type === "block") {
     el("rect", { class: "n-shape", x: -n.w / 2, y: -n.h / 2, width: n.w, height: n.h, rx: 0 }, g);
     dibujarMath(g, n.label, n.font, 0, 0);
@@ -876,7 +920,7 @@ function renderNode(n) {
     }
     if (n.label) dibujarMath(g, n.label, 12, 0, -r - 12);
   } else if (n.type === "node") {
-    el("circle", { cx: 0, cy: 0, r: 4.5, fill: "#101418", stroke: "none",
+    el("circle", { cx: 0, cy: 0, r: 4.5, stroke: "none",
       class: S.sel.includes(n.id) ? "n-dot sel-dot" : "n-dot" }, g);
     el("circle", { cx: 0, cy: 0, r: 11, fill: "transparent" }, g);
     if (n.label) dibujarMath(g, n.label, 12, 0, -14);
@@ -893,14 +937,14 @@ function renderNode(n) {
 function renderEdge(e) {
   if (!e.pts) return;
   const sel = S.selEdges.includes(e.id);
-  const g = el("g", { "data-eid": e.id }, gEdges);
+  const g = el("g", { "data-eid": e.id, style: estiloColor(e.color) }, gEdges);
   el("path", { class: "edge-hit", d: pathD(e.pts, 6) }, g);
   const tgt = getNode(e.to.id);
   const noHead = e.arrow === false || (tgt && tgt.type === "node");  // una bifurcación no lleva punta
   const p = el("path", {
     class: "edge" + (e.dashed ? " dashed" : "") + (sel ? " sel" : ""),
     d: pathD(e.pts, 6),
-    "marker-end": noHead ? "" : (sel ? "url(#arrowSel)" : "url(#arrow)")
+    "marker-end": noHead ? "" : (sel ? "url(#arrowSel)" : markerPara(colorEfectivo(e, "flecha")))
   }, g);
   if (e.width) p.setAttribute("stroke-width", e.width);
   if (e.label) {
@@ -969,11 +1013,12 @@ let hoverNode = null;
 function render() {
   actualizarTamaños();
   routeAll();
+  aplicarTema();
   gEdges.textContent = ""; gNodes.textContent = ""; gOv.textContent = "";
   viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
   $("#gridbg").style.display = S.showGrid ? "" : "none";
   for (const e of S.edges) renderEdge(e);
-  for (const p of junctionDots()) el("circle", { cx: p.x, cy: p.y, r: 4.5, fill: "#101418" }, gEdges);
+  for (const p of junctionDots()) el("circle", { class: "n-dot", cx: p.x, cy: p.y, r: 4.5 }, gEdges);
   for (const n of S.nodes) renderNode(n);
   renderPorts();
   if (drag && drag.kind === "connect" && drag.cur) {
@@ -1008,9 +1053,10 @@ function renderInspector() {
         <div class="row"><label>Fondo</label><div class="fill"><select id="p-grid">
           <option value="1">Grilla visible</option><option value="0">Hoja limpia</option></select></div></div>
         <div class="hint">La grilla no se exporta al SVG ni al PNG.</div>
-      </div>`;
+      </div>` + seccionTema();
     const g = $("#p-grid"); g.value = S.showGrid ? "1" : "0";
     g.onchange = () => { S.showGrid = g.value === "1"; render(); };
+    wireTema();
     return;
   }
   let h = "";
@@ -1035,6 +1081,7 @@ function renderInspector() {
       <div class="row"><label>Destino</label><div class="fill"><select id="e-tp">
         ${portOpts(e.to.port)}</select></div></div>
     </div>`;
+    h += seccionColorPropio(e, "ec-", ["flecha"]);
   }
   if (nsel.length) {
     const n = nsel[0];
@@ -1078,14 +1125,59 @@ function renderInspector() {
         ${auto ? `<div class="hint" style="margin-top:8px">El bloque crece o se achica solo con la ecuación que escribas.</div>` : ""}
       </div>`;
     }
+    h += seccionColorPropio(n, "nc-", clavesColor(n));
     h += `<div class="sec"><h3>Acciones</h3><div class="iconbar">
       <button class="btn" id="n-dup">Duplicar</button>
       <button class="btn" id="n-del">Borrar</button>
       <button class="btn" id="n-snap">Imantar</button>
     </div></div>`;
   }
+  h += seccionTema();
   box.innerHTML = h;
   wireInspector(nsel, esel);
+}
+/* ---- colores: una sección para todo el diagrama y otra para el elemento elegido ---- */
+const clavesColor = (n) => n.type === "node" ? ["flecha"]
+  : (n.type === "text" || n.type === "io") ? ["texto"]
+  : ["relleno", "borde", "texto"];
+const filaColor = (id, k, valor) =>
+  `<label for="${id}">${NOMBRE_COLOR[k]}</label><input type="color" class="swatch" id="${id}" value="${valor}">`;
+function seccionTema() {
+  return `<div class="sec"><h3>Colores del diagrama</h3><div class="cgrid">` +
+    Object.keys(TEMA_DEF).map(k => filaColor("t-" + k, k, temaDe(k))).join("") +
+    `</div><div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="t-reset">Volver al blanco y negro</button></div>
+    <div class="hint" style="margin-top:8px">Valen para todo el diagrama y se guardan con él.
+      Si querés que un elemento se despegue del resto, seleccionalo y cambiale el color ahí.</div></div>`;
+}
+function seccionColorPropio(o, pre, claves) {
+  const propio = o.color && Object.keys(o.color).some(k => o.color[k]);
+  return `<div class="sec"><h3>Color propio</h3><div class="cgrid">` +
+    claves.map(k => filaColor(pre + k, k, colorEfectivo(o, k))).join("") + `</div>` +
+    (propio ? `<div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="${pre}reset">Usar los del diagrama</button></div>` : "") +
+    `<div class="hint" style="margin-top:8px">${propio
+      ? "Este elemento tiene colores propios: no lo toca lo que cambies arriba."
+      : "Todavía sigue los colores del diagrama. Tocá uno y se despega."}</div></div>`;
+}
+function wireTema() {
+  for (const k in TEMA_DEF) {
+    const e = document.getElementById("t-" + k); if (!e) continue;
+    e.addEventListener("input", () => lock(() => { S.tema[k] = e.value; render(); }));
+    e.addEventListener("change", () => { S.tema[k] = e.value; commit(); });
+  }
+  const r = document.getElementById("t-reset");
+  if (r) r.onclick = () => { S.tema = Object.assign({}, TEMA_DEF); commit(); render(); };
+}
+function wireColorPropio(pre, claves, objs) {
+  const pintar = (k, v) => objs.forEach(o => { o.color = Object.assign({}, o.color); o.color[k] = v; });
+  for (const k of claves) {
+    const e = document.getElementById(pre + k); if (!e) continue;
+    e.addEventListener("input", () => lock(() => { pintar(k, e.value); render(); }));
+    e.addEventListener("change", () => { pintar(k, e.value); commit(); render(); });
+  }
+  const r = document.getElementById(pre + "reset");
+  if (r) r.onclick = () => { objs.forEach(o => delete o.color); commit(); render(); };
 }
 const portOpts = (v) => ["l", "r", "t", "b"].map(p =>
   `<option value="${p}"${p === v ? " selected" : ""}>${{ l: "Izquierda", r: "Derecha", t: "Arriba", b: "Abajo" }[p]}</option>`).join("");
@@ -1137,14 +1229,19 @@ function wireInspector(nsel, esel) {
   const fp = document.getElementById("e-fp"), tp = document.getElementById("e-tp");
   if (fp) fp.onchange = () => { esel.forEach(e => { e.from.port = fp.value; e.variant = 0; }); commit(); render(); };
   if (tp) tp.onchange = () => { esel.forEach(e => { e.to.port = tp.value; e.variant = 0; }); commit(); render(); };
+
+  if (nsel.length) wireColorPropio("nc-", clavesColor(nsel[0]), nsel);
+  if (esel.length) wireColorPropio("ec-", ["flecha"], esel);
+  wireTema();
 }
 
 /* ======================= historial ======================= */
 let undoStack = [], redoStack = [];
-const snapshot = () => JSON.stringify({ nodes: S.nodes, edges: S.edges, uidc });
+const snapshot = () => JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema, uidc });
 function restore(js) {
   const d = JSON.parse(js);
   S.nodes = d.nodes; S.edges = d.edges; uidc = d.uidc || uidc;
+  S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
   S.sel = S.sel.filter(id => getNode(id)); S.selEdges = S.selEdges.filter(id => getEdge(id));
 }
 let lastSnap = null;
@@ -1439,24 +1536,28 @@ function buildExportSVG() {
   const s = document.createElementNS(NS, "svg");
   s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
   s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
+  // una punta de flecha por cada color que se esté usando, igual que en la hoja
+  const colores = Array.from(new Set(S.edges.map(e => colorEfectivo(e, "flecha"))));
   const defs = document.createElementNS(NS, "defs");
-  defs.innerHTML = `<marker id="arrow" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
-    orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="#101418"/></marker>`;
+  defs.innerHTML = colores.map(c =>
+    `<marker id="${idMarcador(c)}" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
+      orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="${c}"/></marker>`).join("");
   s.appendChild(defs);
   const style = document.createElementNS(NS, "style");
-  style.textContent = `.n-shape{fill:#fff;stroke:#101418;stroke-width:1.6}
-    .n-label,.n-sign,.e-label{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central}
-    .n-math{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:start;dominant-baseline:central}
-    .n-bar{stroke:#101418;stroke-width:1.4;fill:none}
-    .n-paren{stroke:#101418;stroke-width:1.25;fill:none;stroke-linecap:round}
-.n-paren{stroke:#101418;stroke-width:1.25;fill:none;stroke-linecap:round}
-    .n-cross{stroke:#101418;stroke-width:1.4;fill:none}
-    .edge{stroke:#101418;stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
-    .edge.dashed{stroke-dasharray:6 4}.e-label-bg{fill:#fff}`;
+  style.textContent = `svg{${Object.keys(TEMA_DEF).map(k => `--c-${k}:${temaDe(k)}`).join(";")}}
+    .n-shape{fill:var(--c-relleno);stroke:var(--c-borde);stroke-width:1.6}
+    .n-label,.n-sign,.e-label{font-family:Arial,Helvetica,sans-serif;fill:var(--c-texto);text-anchor:middle;dominant-baseline:central}
+    .n-math{font-family:Arial,Helvetica,sans-serif;fill:var(--c-texto);text-anchor:start;dominant-baseline:central}
+    .n-bar{stroke:var(--c-texto);stroke-width:1.4;fill:none}
+    .n-paren{stroke:var(--c-texto);stroke-width:1.25;fill:none;stroke-linecap:round}
+    .n-cross{stroke:var(--c-borde);stroke-width:1.4;fill:none}
+    .n-dot{fill:var(--c-flecha)}
+    .edge{stroke:var(--c-flecha);stroke-width:1.6;fill:none;stroke-linejoin:round;stroke-linecap:round}
+    .edge.dashed{stroke-dasharray:6 4}.e-label-bg{fill:var(--c-fondo)}`;
   s.appendChild(style);
   const bg = document.createElementNS(NS, "rect");
   bg.setAttribute("x", b.l - m); bg.setAttribute("y", b.t - m);
-  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#fff");
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", temaDe("fondo"));
   s.appendChild(bg);
   const selN = S.sel, selE = S.selEdges;
   S.sel = []; S.selEdges = []; render();
@@ -1487,7 +1588,7 @@ $("#b-png").onclick = () => {
     const sc = 3, c = document.createElement("canvas");
     c.width = W * sc; c.height = H * sc;
     const ctx = c.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = temaDe("fondo"); ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0, c.width, c.height);
     c.toBlob(bl => { download("diagrama-bloques.png", bl); toast("PNG descargado (3×)"); });
   };
@@ -1495,7 +1596,7 @@ $("#b-png").onclick = () => {
   img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(str)));
 };
 $("#b-save").onclick = () => {
-  download("diagrama-bloques.json", new Blob([JSON.stringify({ nodes: S.nodes, edges: S.edges }, null, 1)], { type: "application/json" }));
+  download("diagrama-bloques.json", new Blob([JSON.stringify({ nodes: S.nodes, edges: S.edges, tema: S.tema }, null, 1)], { type: "application/json" }));
   toast("Diagrama guardado");
 };
 $("#b-open").onclick = () => {
@@ -1506,6 +1607,7 @@ $("#io-ok").onclick = () => {
   try {
     const d = JSON.parse($("#io-text").value);
     S.nodes = d.nodes || []; S.edges = d.edges || [];
+    S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
     uidc = S.nodes.length + S.edges.length + 100;
     S.sel = []; S.selEdges = []; commit(); fit(); render();
     $("#ov-io").classList.remove("show"); toast("Diagrama cargado");
