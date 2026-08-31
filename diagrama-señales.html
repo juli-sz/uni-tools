@@ -1,1 +1,1243 @@
-pendiente
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagramas de flujo de señales</title>
+<meta name="description" content="Nodos, transmitancias y la regla de Mason: trayectorias, lazos, cofactores y función de transferencia">
+<link rel="icon" type="image/png" href="uni-tools-marca.png">
+<style>
+:root{
+  --ink:#12181f;
+  --ink-2:#3d4b5a;
+  --line:#d7dee6;
+  --line-2:#eef2f6;
+  --paper:#ffffff;
+  --shell:#f2f5f8;
+  --accent:#0d5bd6;
+  --accent-soft:#e3edff;
+  --warn:#c2410c;
+  --ok:#166534;
+  --ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+  --draw:Arial,Helvetica,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--ui);color:var(--ink);background:var(--shell);
+  display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+/* ---------- barra de arriba ---------- */
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;
+  background:var(--paper);border-bottom:1px solid var(--line);z-index:5}
+.brand{display:flex;align-items:baseline;gap:8px;margin-right:4px}
+.brand b{font-size:14px;letter-spacing:-.01em}
+.brand span{font-family:var(--mono);font-size:10px;color:#8a97a5;letter-spacing:.08em;text-transform:uppercase}
+.group{display:flex;align-items:center;gap:4px;padding-right:12px;border-right:1px solid var(--line-2)}
+.group:last-child{border-right:0}
+.glab{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;text-transform:uppercase;
+  margin-right:2px;cursor:pointer;user-select:none;transition:color .15s}
+.glab:hover{color:var(--ink)}
+.glab::after{content:" \25BC";font-size:8px;opacity:.6;display:inline-block;
+  transition:transform .2s;margin-left:4px}
+.group.collapsed .glab::after{transform:rotate(-90deg)}
+.group.collapsed > *:not(.glab){display:none !important}
+button,select,input[type=text],input[type=number]{font-family:var(--ui);font-size:12px;color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 9px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;line-height:1;white-space:nowrap;
+  transition:background .12s,border-color .12s}
+.btn:hover{background:var(--line-2)}
+.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.on svg{stroke:#fff}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--line-2)}
+.btn svg{width:14px;height:14px;stroke:var(--ink-2);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.chip{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:0 6px}
+.marca-navbar{height:26px;width:auto;display:block;flex:none}
+/* ---------- estructura ---------- */
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;background:var(--paper);overflow:hidden}
+svg#canvas{width:100%;height:100%;display:block;touch-action:none}
+svg#canvas.mode-connect{cursor:crosshair}
+svg#canvas.panning{cursor:grabbing}
+#palette{position:absolute;top:12px;left:12px;background:var(--paper);border:1px solid var(--line);
+  border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:4px;
+  box-shadow:0 6px 24px rgba(18,24,31,.08)}
+#palette .ptitle{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;padding:2px 4px 4px}
+.ptool{width:172px;display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;
+  border-radius:7px;padding:6px 8px;cursor:pointer;text-align:left}
+.ptool:hover{background:var(--line-2)}
+.ptool.on{background:var(--accent-soft);border-color:#b9d2ff}
+.ptool svg{width:34px;height:22px;flex:none;overflow:visible;stroke:var(--ink);stroke-width:1.4;fill:none}
+.ptool span{font-size:12px}
+.ptool kbd{margin-left:auto;font-family:var(--mono);font-size:10px;color:#93a0ae}
+#inspector{width:280px;flex:none;background:var(--paper);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+  transition:width .2s ease,min-width .2s ease,border-color .2s ease}
+#inspector.collapsed{width:0;min-width:0;border-left-color:transparent}
+.sec{padding:12px 14px;border-bottom:1px solid var(--line-2)}
+.sec h3{margin:0 0 10px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:#93a0ae;font-weight:600}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.row:last-child{margin-bottom:0}
+.row label{font-size:11.5px;color:var(--ink-2);width:76px;flex:none}
+.row .fill{flex:1;min-width:0}
+input[type=text],input[type=number],select{width:100%;border:1px solid var(--line);border-radius:6px;
+  padding:5px 7px;background:var(--paper)}
+input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.hint{font-size:11px;color:#8a97a5;line-height:1.5}
+.empty{padding:26px 16px;text-align:center;color:#93a0ae;font-size:12px;line-height:1.6}
+.iconbar{display:flex;flex-wrap:wrap;gap:4px}
+kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line);
+  border-bottom-width:2px;border-radius:4px;padding:1px 4px;font-size:10px}
+/* ---------- barra de estado ---------- */
+#status{display:flex;align-items:center;gap:16px;padding:5px 14px;background:var(--paper);
+  border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:#8a97a5}
+#status .k{color:var(--ink-2)}
+#status .warn{color:var(--warn)}
+#toast{position:absolute;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;font-size:12px;padding:8px 14px;border-radius:8px;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ---------- ventanas ---------- */
+.overlay{position:fixed;inset:0;background:rgba(18,24,31,.45);display:none;align-items:center;
+  justify-content:center;z-index:40;padding:20px}
+.overlay.show{display:flex}
+.modal{background:var(--paper);border-radius:12px;max-width:820px;width:100%;max-height:86vh;
+  overflow:auto;padding:22px 24px;box-shadow:0 20px 60px rgba(18,24,31,.3)}
+.modal h2{margin:0 0 4px;font-size:16px}
+.modal p.sub{margin:0 0 16px;color:#8a97a5;font-size:12px}
+.modal h4{margin:20px 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:#93a0ae}
+.modal h4:first-of-type{margin-top:6px}
+.modal table{width:100%;border-collapse:collapse;font-size:12.5px}
+.modal td,.modal th{padding:5px 8px;border-bottom:1px solid var(--line-2);text-align:left;vertical-align:top}
+.modal th{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:#93a0ae;font-weight:600}
+.modal td.simb{width:56px;font-family:var(--mono);color:var(--accent);white-space:nowrap}
+.modal td.exp{font-family:var(--mono);font-size:12px}
+.modal td.ruta{color:#8a97a5;font-size:11.5px;font-family:var(--mono);width:38%}
+.eq{font-family:var(--mono);font-size:12.5px;line-height:1.9}
+.caja{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--shell);
+  font-family:var(--mono);font-size:13px;overflow-x:auto}
+.caja.resultado{border-color:#b9d2ff;background:var(--accent-soft)}
+.nada{color:#8a97a5;font-size:12px;padding:4px 0}
+textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
+  border-radius:8px;padding:8px;resize:vertical}
+.filebox{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:10px;padding:16px}
+.filebox .nom{font-family:var(--mono);font-size:11.5px;color:#8a97a5;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal details{margin-top:16px}
+.modal summary{cursor:pointer;font-size:12px;color:var(--ink-2);user-select:none;padding:4px 0}
+.modal details textarea{margin-top:8px}
+/* ---------- dibujo ---------- */
+svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff}
+.n-dot{fill:var(--c-nodo);stroke:none}
+.n-io{fill:var(--paper);stroke:var(--c-nodo);stroke-width:2}
+.n-hit{fill:transparent;stroke:none;cursor:pointer}
+.n-name{font-family:var(--draw);fill:var(--c-texto);text-anchor:middle;dominant-baseline:central;
+  pointer-events:none;user-select:none;font-size:13px}
+.n-rol{font-family:var(--mono);fill:#93a0ae;text-anchor:middle;dominant-baseline:central;
+  pointer-events:none;user-select:none;font-size:8.5px;letter-spacing:.1em}
+.r-linea{fill:none;stroke:var(--c-rama);stroke-width:1.6;stroke-linecap:round}
+.r-hit{fill:none;stroke:transparent;stroke-width:16;cursor:pointer}
+.r-punta{fill:var(--c-rama);stroke:none}
+.r-lab{font-family:var(--draw);fill:var(--c-texto);text-anchor:middle;dominant-baseline:central;
+  pointer-events:none;user-select:none;font-size:13px}
+.r-lab-bg{fill:var(--c-fondo)}
+.io-stub{stroke:var(--c-rama);stroke-width:1.6;fill:none}
+.sel .n-dot,.sel .n-io{fill:var(--accent);stroke:var(--accent)}
+.sel .r-linea{stroke:var(--accent)}
+.sel .r-punta{fill:var(--accent)}
+.sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+.ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
+.resalte .r-linea{stroke:var(--accent);stroke-width:3}
+.resalte .r-punta{fill:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>Flujo de señales</b><span>mason</span></div>
+
+  <div class="group collapsed">
+    <span class="glab">Modo</span>
+    <button class="btn on" id="m-select" title="Seleccionar y mover (V)">Selección</button>
+    <button class="btn" id="m-connect" title="Dibujar ramas (C)">Conectar</button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Edición</span>
+    <button class="btn ghost" id="b-undo" title="Deshacer (Ctrl+Z)">
+      <svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 010 10h-3"/></svg></button>
+    <button class="btn ghost" id="b-redo" title="Rehacer (Ctrl+Y)">
+      <svg viewBox="0 0 24 24"><path d="M15 14l4-4-4-4"/><path d="M19 10h-9a5 5 0 000 10h3"/></svg></button>
+    <button class="btn ghost" id="b-del" title="Borrar (Supr)">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg></button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Vista</span>
+    <button class="btn ghost" id="b-zoomout"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-4-4"/></svg></button>
+    <span class="chip" id="zoomlab">100%</span>
+    <button class="btn ghost" id="b-zoomin"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M20 20l-4-4"/></svg></button>
+    <button class="btn ghost" id="b-fit" title="Encuadrar (F)">Encuadrar</button>
+    <button class="btn ghost" id="b-gridshow" title="Ver grilla">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M4 12h16M12 4v16"/></svg></button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Análisis</span>
+    <button class="btn" id="b-mason" title="Análisis completo (A)">
+      <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M6 15l4-6 4 4 4-8"/></svg>Mason</button>
+    <select id="ejemplos" style="width:150px" title="Cargar un diagrama de ejemplo">
+      <option value="">Ejemplos…</option>
+      <option value="simple">Lazo simple</option>
+      <option value="dos">Dos lazos que se tocan</option>
+      <option value="disjuntos">Lazos disjuntos</option>
+      <option value="dostray">Dos trayectorias directas</option>
+    </select>
+    <button class="btn ghost" id="b-clear">Vaciar</button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Archivo</span>
+    <input type="text" id="b-nombre" style="width:136px" placeholder="nombre del archivo"
+           title="Con este nombre se descargan el SVG, el PNG y el JSON">
+    <button class="btn ghost" id="b-svg">SVG</button>
+    <button class="btn ghost" id="b-png">PNG</button>
+    <button class="btn ghost" id="b-save">Guardar</button>
+    <button class="btn ghost" id="b-open">Abrir</button>
+    <button class="btn ghost" id="b-help">?</button>
+  </div>
+
+  <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+    <img class="marca-navbar" src="uni-tools-marca.png" alt="uni-tools" title="uni-tools">
+    <button class="btn on" id="b-toggle-panel" title="Ocultar/Mostrar panel lateral">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="3" x2="16" y2="21"/></svg>Panel
+    </button>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="canvas">
+      <defs>
+        <pattern id="gridPat" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M20 0H0V20" fill="none" stroke="#e8edf3" stroke-width="1"/>
+        </pattern>
+        <pattern id="gridPat10" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#gridPat)"/>
+          <path d="M100 0H0V100" fill="none" stroke="#dbe3ec" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <g id="viewport">
+        <rect id="gridbg" x="-6000" y="-6000" width="14000" height="14000" fill="url(#gridPat10)"/>
+        <g id="gRamas"></g>
+        <g id="gNodos"></g>
+        <g id="gOverlay"></g>
+      </g>
+    </svg>
+    <div id="palette">
+      <div class="ptitle">INSERTAR</div>
+      <button class="ptool" data-add="nodo">
+        <svg viewBox="0 0 34 22"><circle cx="17" cy="11" r="4" fill="currentColor" stroke="none"/><path d="M2 11h11M21 11h11"/></svg>
+        <span>Nodo</span><kbd>N</kbd></button>
+      <div class="ptitle" style="padding-top:8px">RAMAS</div>
+      <div class="hint" style="padding:0 8px 6px;width:172px">Pasá a <b>Conectar</b> (<kbd>C</kbd>) y
+        arrastrá de un nodo a otro. La transmitancia se escribe en el panel.</div>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <aside id="inspector"><div id="insp"></div></aside>
+</main>
+
+<div id="status">
+  <span><span class="k">Nodos</span> <span id="st-n">0</span></span>
+  <span><span class="k">Ramas</span> <span id="st-r">0</span></span>
+  <span><span class="k">Selección</span> <span id="st-s">—</span></span>
+  <span id="st-warn"></span>
+  <span id="st-hint" style="margin-left:auto"></span>
+</div>
+
+<div class="overlay" id="ov-mason"><div class="modal">
+  <h2>Análisis por la regla de Mason</h2>
+  <p class="sub" id="mason-sub"></p>
+  <div id="mason-body"></div>
+  <div style="margin-top:18px;text-align:right">
+    <button class="btn" onclick="document.getElementById('ov-mason').classList.remove('show')">Cerrar</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="ov-help"><div class="modal" style="max-width:620px">
+  <h2>Cómo se usa</h2>
+  <p class="sub">Un diagrama de flujo de señales es un grafo: los nodos son las variables y cada rama
+    lleva la transmitancia que multiplica a la variable de la que sale.</p>
+  <table>
+    <tr><td><kbd>N</kbd></td><td>Insertar un nodo. Después hacé clic en la hoja</td></tr>
+    <tr><td><kbd>C</kbd> / <kbd>V</kbd></td><td>Modo conectar / modo selección</td></tr>
+    <tr><td>Arrastrar de nodo a nodo</td><td>En modo conectar, dibuja una rama. Si soltás sobre el mismo nodo queda un autolazo</td></tr>
+    <tr><td>Entrada y salida</td><td>Seleccioná un nodo y marcalo en el panel. Mason necesita una de cada una</td></tr>
+    <tr><td><kbd>A</kbd></td><td>Análisis: ecuaciones, trayectorias, lazos, cofactores y función de transferencia</td></tr>
+    <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+    <tr><td>Flechas</td><td>Mover un paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
+    <tr><td>Rueda / Espacio</td><td>Mueve la hoja · <kbd>Ctrl</kbd>+rueda hace zoom</td></tr>
+  </table>
+  <div style="margin-top:16px;text-align:right">
+    <button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="ov-io"><div class="modal" style="max-width:560px">
+  <h2>Abrir diagrama</h2>
+  <p class="sub">Un <b>.json</b> guardado desde acá, o un <b>.svg</b> exportado desde acá:
+    el SVG se lleva los datos del diagrama adentro.</p>
+  <div class="filebox">
+    <button class="btn on" id="io-file-btn">Elegir archivo…</button>
+    <span class="nom" id="io-file-nom">Ningún archivo elegido</span>
+  </div>
+  <input type="file" id="io-file" accept=".json,.svg,application/json,image/svg+xml" hidden>
+  <details>
+    <summary>o pegar el JSON a mano</summary>
+    <textarea id="io-text" spellcheck="false" placeholder='{ "nodos": [...], "ramas": [...] }'></textarea>
+  </details>
+  <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn" id="io-cancel">Cancelar</button>
+    <button class="btn on" id="io-ok">Cargar lo pegado</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+const $ = (s) => document.querySelector(s);
+const svg = $("#canvas"), viewport = $("#viewport");
+const gRamas = $("#gRamas"), gNodos = $("#gNodos"), gOv = $("#gOverlay");
+
+/* ======================= modelo =======================
+   nodos: la variable del sistema. ramas: de dónde a dónde y con qué transmitancia.
+   La entrada y la salida son dos nodos marcados; Mason necesita una de cada una. */
+let S = {
+  nodos: [],            // { id, nombre, x, y, tipo: "normal" | "entrada" | "salida" }
+  ramas: [],            // { id, de, a, g, curva }
+  sel: [], selR: [],
+  snap: true, grid: 20, showGrid: true, zoom: 1, pan: { x: 90, y: 70 },
+  nombre: "flujo-de-senales"
+};
+const NOMBRE_DEF = "flujo-de-senales";
+let uidc = 1;
+const uid = (p) => p + (uidc++);
+const getNodo = (id) => S.nodos.find(n => n.id === id);
+const getRama = (id) => S.ramas.find(r => r.id === id);
+const R_NODO = 6;                       // radio del puntito del nodo
+
+function limpiarNombre(s) {
+  const t = String(s || "").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
+  return t || NOMBRE_DEF;
+}
+const nombreArchivo = (ext) => limpiarNombre(S.nombre) + "." + ext;
+
+function proximoNombre() {
+  const usados = new Set(S.nodos.map(n => n.nombre));
+  for (let i = 1; i < 200; i++) if (!usados.has("x" + i)) return "x" + i;
+  return "x";
+}
+function nuevoNodo(x, y, extra) {
+  return Object.assign({ id: uid("n"), nombre: proximoNombre(), x, y, tipo: "normal" }, extra || {});
+}
+function nuevaRama(de, a, extra) {
+  // La perpendicular ya se da vuelta con el sentido de la rama, así que con una
+  // curvatura negativa las de ida arquean para arriba y las de vuelta para abajo.
+  return Object.assign({ id: uid("r"), de, a, g: "1", curva: de === a ? 46 : -46 }, extra || {});
+}
+
+/* ======================= geometría ======================= */
+const snapV = (v) => S.snap ? Math.round(v / S.grid) * S.grid : Math.round(v);
+function bboxAll() {
+  if (!S.nodos.length) return { l: 0, t: 0, r: 400, b: 300 };
+  let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
+  for (const n of S.nodos) {
+    l = Math.min(l, n.x - 40); r = Math.max(r, n.x + 40);
+    t = Math.min(t, n.y - 34); b = Math.max(b, n.y + 34);
+  }
+  for (const rr of S.ramas) {                 // el arco de cada rama también ocupa lugar
+    const p = curvaDe(rr); if (!p) continue;
+    l = Math.min(l, p.cx - 30); r = Math.max(r, p.cx + 30);
+    t = Math.min(t, p.cy - 30); b = Math.max(b, p.cy + 30);
+  }
+  return { l, t, r, b };
+}
+/* Cada rama es una curva cuadrática. Devuelve los puntos que hacen falta para
+   dibujarla, poner la punta de flecha en el medio y ubicar la etiqueta. */
+function curvaDe(r) {
+  const A = getNodo(r.de), B = getNodo(r.a);
+  if (!A || !B) return null;
+  if (r.de === r.a) {                          // autolazo: un rulo apoyado sobre el nodo
+    const h = Math.abs(r.curva) || 46, s = r.curva < 0 ? -1 : 1;
+    const c1 = { x: A.x - h * .72, y: A.y - s * h * 1.5 };
+    const c2 = { x: A.x + h * .72, y: A.y - s * h * 1.5 };
+    const d = `M ${A.x} ${A.y - s * R_NODO} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${A.x} ${A.y - s * R_NODO}`;
+    return { d, cx: A.x, cy: A.y - s * (h * 1.13 + R_NODO), ang: s > 0 ? 0 : 180,
+             px: A.x, py: A.y - s * (h * 1.13 + R_NODO), lx: A.x, ly: A.y - s * (h * 1.5 + R_NODO) };
+  }
+  const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
+  const ux = dx / L, uy = dy / L;              // versor a lo largo, y su perpendicular
+  const nx = -uy, ny = ux;
+  // los extremos se corren para arrancar en el borde del puntito
+  const a = { x: A.x + ux * R_NODO, y: A.y + uy * R_NODO };
+  const b = { x: B.x - ux * R_NODO, y: B.y - uy * R_NODO };
+  const ctrl = { x: (a.x + b.x) / 2 + nx * r.curva, y: (a.y + b.y) / 2 + ny * r.curva };
+  const d = `M ${a.x} ${a.y} Q ${ctrl.x} ${ctrl.y} ${b.x} ${b.y}`;
+  // punto y tangente en la mitad de la curva, donde va la flecha
+  const t = 0.5;
+  const px = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * ctrl.x + t * t * b.x;
+  const py = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * ctrl.y + t * t * b.y;
+  const tx = 2 * (1 - t) * (ctrl.x - a.x) + 2 * t * (b.x - ctrl.x);
+  const ty = 2 * (1 - t) * (ctrl.y - a.y) + 2 * t * (b.y - ctrl.y);
+  const ang = Math.atan2(ty, tx) * 180 / Math.PI;
+  const signo = r.curva >= 0 ? 1 : -1;
+  return { d, cx: px, cy: py, ang, px, py,
+           lx: px + nx * signo * 15, ly: py + ny * signo * 15 };
+}
+function ramaCerca(w) {                        // la rama más cercana al puntero, para el hover
+  let best = null, bd = 14;
+  for (const r of S.ramas) {
+    const c = curvaDe(r); if (!c) continue;
+    const d = Math.hypot(c.px - w.x, c.py - w.y);
+    if (d < bd) { bd = d; best = r; }
+  }
+  return best;
+}
+
+/* ======================= dibujo ======================= */
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== "") e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+/* "x_1" se dibuja con el 1 como subíndice */
+function ponerTexto(t, s) {
+  t.textContent = "";
+  const partes = String(s == null ? "" : s).split("_");
+  t.appendChild(document.createTextNode(partes[0]));
+  for (let i = 1; i < partes.length; i++) {
+    const sub = el("tspan", { dy: 4, "font-size": "72%" });
+    sub.textContent = partes[i];
+    t.appendChild(sub);
+    if (i < partes.length - 1) { const v = el("tspan", { dy: -4 }); v.textContent = ""; t.appendChild(v); }
+  }
+}
+const anchoTexto = (s) => String(s == null ? "" : s).replace(/_/g, "").length * 7.2 + 10;
+
+function renderRama(r) {
+  const c = curvaDe(r); if (!c) return;
+  const g = el("g", { class: "rama" + (S.selR.includes(r.id) ? " sel" : ""), "data-rid": r.id }, gRamas);
+  el("path", { class: "r-hit", d: c.d }, g);
+  el("path", { class: "r-linea", d: c.d }, g);
+  el("path", { class: "r-punta", transform: `translate(${c.px},${c.py}) rotate(${c.ang})`,
+    d: "M -5.5 -4 L 5 0 L -5.5 4 Z" }, g);
+  if (r.g !== "" && r.g != null) {
+    const an = anchoTexto(r.g);
+    el("rect", { class: "r-lab-bg", x: c.lx - an / 2, y: c.ly - 9, width: an, height: 18, rx: 3 }, g);
+    ponerTexto(el("text", { class: "r-lab", x: c.lx, y: c.ly }, g), r.g);
+  }
+}
+function renderNodo(n) {
+  const g = el("g", { class: "nodo" + (S.sel.includes(n.id) ? " sel" : ""), "data-id": n.id,
+    transform: `translate(${n.x},${n.y})` }, gNodos);
+  if (n.tipo === "entrada") el("path", { class: "io-stub", d: "M -34 0 h 22 M -18 -4 l 5 4 -5 4" }, g);
+  if (n.tipo === "salida") el("path", { class: "io-stub", d: "M 12 0 h 22 M 29 -4 l 5 4 -5 4" }, g);
+  el("circle", { class: n.tipo === "normal" ? "n-dot" : "n-io", cx: 0, cy: 0, r: R_NODO }, g);
+  el("circle", { class: "n-hit", cx: 0, cy: 0, r: 15 }, g);
+  ponerTexto(el("text", { class: "n-name", x: 0, y: -20 }, g), n.nombre);
+  if (n.tipo !== "normal") {
+    const t = el("text", { class: "n-rol", x: 0, y: 20 }, g);
+    t.textContent = n.tipo === "entrada" ? "ENTRADA" : "SALIDA";
+  }
+  if (S.sel.includes(n.id)) el("rect", { class: "sel-box", x: -18, y: -30, width: 36, height: 48 }, g);
+}
+function render() {
+  gRamas.textContent = ""; gNodos.textContent = ""; gOv.textContent = "";
+  viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
+  $("#gridbg").style.display = S.showGrid ? "" : "none";
+  for (const r of S.ramas) renderRama(r);
+  for (const n of S.nodos) renderNodo(n);
+  if (drag && drag.kind === "connect" && drag.cur) {
+    const A = getNodo(drag.fromId);
+    el("path", { class: "ghostline", d: `M ${A.x} ${A.y} L ${drag.cur.x} ${drag.cur.y}` }, gOv);
+  }
+  if (drag && drag.kind === "band") {
+    const b = drag.band;
+    el("rect", { class: "band", x: Math.min(b.x1, b.x2), y: Math.min(b.y1, b.y2),
+      width: Math.abs(b.x2 - b.x1), height: Math.abs(b.y2 - b.y1) }, gOv);
+  }
+  $("#st-n").textContent = S.nodos.length;
+  $("#st-r").textContent = S.ramas.length;
+  $("#st-s").textContent = (S.sel.length + S.selR.length)
+    ? S.sel.length + " nodos · " + S.selR.length + " ramas" : "—";
+  $("#zoomlab").textContent = Math.round(S.zoom * 100) + "%";
+  $("#b-undo").disabled = !undoStack.length;
+  $("#b-redo").disabled = !redoStack.length;
+  if (document.activeElement !== $("#b-nombre")) $("#b-nombre").value = S.nombre || "";
+  const falta = [];
+  if (!S.nodos.some(n => n.tipo === "entrada")) falta.push("entrada");
+  if (!S.nodos.some(n => n.tipo === "salida")) falta.push("salida");
+  $("#st-warn").innerHTML = S.nodos.length && falta.length
+    ? `<span class="warn">falta marcar ${falta.join(" y ")}</span>` : "";
+  renderInspector();
+}
+
+/* ======================= Mason =======================
+   Todo el análisis sale de recorrer el grafo: caminos simples de la entrada a la
+   salida, ciclos simples, y qué ciclos no se tocan entre sí. */
+const nodosDeRamas = (ramas) => {
+  const s = new Set();
+  for (const r of ramas) { s.add(r.de); s.add(r.a); }
+  return s;
+};
+const salientesDe = (id) => S.ramas.filter(r => r.de === id);
+
+function trayectorias(desde, hasta) {
+  const res = [];
+  if (!desde || !hasta || desde === hasta) return res;
+  const paso = (actual, visitados, ramas) => {
+    for (const r of salientesDe(actual)) {
+      if (r.a === hasta) { res.push(ramas.concat(r)); continue; }
+      if (visitados.has(r.a)) continue;
+      visitados.add(r.a); ramas.push(r);
+      paso(r.a, visitados, ramas);
+      ramas.pop(); visitados.delete(r.a);
+    }
+  };
+  paso(desde, new Set([desde]), []);
+  return res;
+}
+/* Cada ciclo se cuenta una sola vez: arranca siempre por su nodo de menor índice */
+function lazos() {
+  const res = [];
+  const idx = new Map(S.nodos.map((n, i) => [n.id, i]));
+  for (const inicio of S.nodos) {
+    const i0 = idx.get(inicio.id);
+    const paso = (actual, visitados, ramas) => {
+      for (const r of salientesDe(actual)) {
+        if (r.a === inicio.id) { res.push(ramas.concat(r)); continue; }
+        if (idx.get(r.a) < i0 || visitados.has(r.a)) continue;
+        visitados.add(r.a); ramas.push(r);
+        paso(r.a, visitados, ramas);
+        ramas.pop(); visitados.delete(r.a);
+      }
+    };
+    paso(inicio.id, new Set([inicio.id]), []);
+  }
+  return res;
+}
+const seTocan = (a, b) => { for (const n of a) if (b.has(n)) return true; return false; };
+
+/* Todas las combinaciones de lazos que no se tocan, agrupadas por cuántos son */
+function combinacionesDisjuntas(ls) {
+  const porTamano = {};
+  const paso = (desde, actual) => {
+    if (actual.length >= 2) (porTamano[actual.length] = porTamano[actual.length] || []).push(actual.slice());
+    for (let i = desde; i < ls.length; i++) {
+      if (actual.every(j => !seTocan(ls[j].nodos, ls[i].nodos))) { actual.push(i); paso(i + 1, actual); actual.pop(); }
+    }
+  };
+  paso(0, []);
+  return porTamano;
+}
+/* Δ = 1 − ΣL + ΣLL − ΣLLL + …  Se arma para el grafo entero o para el subconjunto
+   de lazos que no tocan una trayectoria (ahí sale el cofactor). */
+function determinante(ls) {
+  const combos = combinacionesDisjuntas(ls);
+  const terminos = [];                       // { orden, indices }
+  ls.forEach((l, i) => terminos.push({ orden: 1, indices: [i] }));
+  Object.keys(combos).map(Number).sort((a, b) => a - b)
+    .forEach(k => combos[k].forEach(c => terminos.push({ orden: k, indices: c })));
+  return { terminos, combos };
+}
+const gananciaDe = (ramas) => ramas.map(r => (r.g === "" || r.g == null) ? "1" : String(r.g));
+/* Producto simbólico: saca los 1 y encierra el factor que lo necesite, incluido
+   el negativo, para que no quede un "G_1·-H_1" difícil de leer */
+function producto(factores) {
+  const utiles = factores.filter(f => f !== "1");
+  if (!utiles.length) return "1";
+  if (utiles.length === 1) return utiles[0];
+  return utiles.map(f => /^[\w.]+$/.test(f) ? f : "(" + f + ")").join("·");
+}
+const rutaDe = (ramas) => {
+  if (!ramas.length) return "";
+  const nombres = [nombreNodo(ramas[0].de)].concat(ramas.map(r => nombreNodo(r.a)));
+  return nombres.join(" → ");
+};
+const nombreNodo = (id) => { const n = getNodo(id); return n ? n.nombre : "?"; };
+const numerico = (s) => { const v = Number(String(s).trim()); return Number.isFinite(v) ? v : null; };
+
+function analizar() {
+  const entrada = S.nodos.find(n => n.tipo === "entrada");
+  const salida = S.nodos.find(n => n.tipo === "salida");
+  const P = trayectorias(entrada && entrada.id, salida && salida.id).map((ramas, i) => ({
+    simbolo: "P" + (i + 1), ramas, nodos: nodosDeRamas(ramas),
+    gan: producto(gananciaDe(ramas)), ruta: rutaDe(ramas)
+  }));
+  const L = lazos().map((ramas, i) => ({
+    simbolo: "L" + (i + 1), ramas, nodos: nodosDeRamas(ramas),
+    gan: producto(gananciaDe(ramas)), ruta: rutaDe(ramas)
+  }));
+  const det = determinante(L);
+  // cofactores: el mismo Δ pero sólo con los lazos que no tocan esa trayectoria
+  const cof = P.map(p => {
+    const libres = L.filter(l => !seTocan(l.nodos, p.nodos));
+    const d = determinante(libres);
+    return { p, libres, det: d };
+  });
+  return { entrada, salida, P, L, det, cof };
+}
+/* Δ escrito como texto, a partir de los términos y de cómo se llama cada lazo */
+function textoDelta(ls, det) {
+  if (!ls.length) return "1";
+  let s = "1";
+  const porOrden = {};
+  det.terminos.forEach(t => (porOrden[t.orden] = porOrden[t.orden] || []).push(t));
+  Object.keys(porOrden).map(Number).sort((a, b) => a - b).forEach(k => {
+    const signo = k % 2 ? " − " : " + ";
+    s += signo + porOrden[k].map(t => t.indices.map(i => ls[i].simbolo).join("")).join(signo === " − " ? " − " : " + ");
+  });
+  return s;
+}
+function valorDelta(ls, det) {
+  if (ls.some(l => l.valor === null)) return null;
+  let v = 1;
+  det.terminos.forEach(t => {
+    const prod = t.indices.reduce((a, i) => a * ls[i].valor, 1);
+    v += (t.orden % 2 ? -1 : 1) * prod;
+  });
+  return v;
+}
+/* Si todas las transmitancias son números, además del simbólico da el resultado */
+function conValores(items) {
+  items.forEach(it => {
+    const vs = gananciaDe(it.ramas).map(numerico);
+    it.valor = vs.some(v => v === null) ? null : vs.reduce((a, b) => a * b, 1);
+  });
+  return items;
+}
+
+/* ======================= sistema de ecuaciones ======================= */
+function ecuaciones() {
+  return S.nodos.map(n => {
+    const entra = S.ramas.filter(r => r.a === n.id);
+    if (!entra.length) return { nodo: n, texto: n.nombre + " = " + (n.tipo === "entrada" ? "entrada del sistema" : "0") };
+    // el término negativo se escribe restando, en vez de quedar como "+ -H·x"
+    const partes = entra.map(r => {
+      let g = ((r.g === "" || r.g == null) ? "1" : String(r.g)).trim();
+      let signo = "+";
+      if (g[0] === "-") { signo = "−"; g = g.slice(1).trim() || "1"; }
+      const factor = g === "1" ? "" : (/^[\w.]+$/.test(g) ? g : "(" + g + ")") + "·";
+      return { signo, txt: factor + nombreNodo(r.de) };
+    });
+    const texto = n.nombre + " = " + partes.map((p, i) =>
+      (i === 0 ? (p.signo === "−" ? "−" : "") : " " + p.signo + " ") + p.txt).join("");
+    return { nodo: n, texto };
+  });
+}
+
+/* ======================= ventana de análisis ======================= */
+function mostrarMason() {
+  const A = analizar();
+  conValores(A.P); conValores(A.L);
+  const elSub = $("#mason-sub"), body = $("#mason-body");
+  if (!A.entrada || !A.salida) {
+    elSub.textContent = "Falta marcar los nodos de entrada y de salida.";
+    body.innerHTML = `<div class="nada">Seleccioná un nodo y en el panel derecho elegí si es la
+      entrada o la salida del sistema. Mason necesita una de cada una.</div>` + htmlEcuaciones();
+    $("#ov-mason").classList.add("show");
+    return;
+  }
+  elSub.textContent = `Entrada ${A.entrada.nombre} · Salida ${A.salida.nombre} · ` +
+    `${A.P.length} trayectoria${A.P.length === 1 ? "" : "s"} directa${A.P.length === 1 ? "" : "s"} · ` +
+    `${A.L.length} lazo${A.L.length === 1 ? "" : "s"}`;
+
+  let h = htmlEcuaciones();
+
+  h += `<h4>1 · Trayectorias directas</h4>`;
+  h += A.P.length ? tabla(["", "Ganancia", "Recorrido"],
+    A.P.map(p => [`<td class="simb">${p.simbolo}</td>`, `<td class="exp">${esc(p.gan)}</td>`,
+                  `<td class="ruta">${esc(p.ruta)}</td>`]))
+    : `<div class="nada">No hay ningún camino de ${esc(A.entrada.nombre)} a ${esc(A.salida.nombre)}.</div>`;
+
+  h += `<h4>2 · Lazos individuales</h4>`;
+  h += A.L.length ? tabla(["", "Ganancia", "Recorrido"],
+    A.L.map(l => [`<td class="simb">${l.simbolo}</td>`, `<td class="exp">${esc(l.gan)}</td>`,
+                  `<td class="ruta">${esc(l.ruta)}</td>`]))
+    : `<div class="nada">El diagrama no tiene lazos: Δ = 1.</div>`;
+
+  h += `<h4>3 · Lazos disjuntos tomados de a dos</h4>`;
+  const pares = A.det.combos[2] || [];
+  h += pares.length ? tabla(["Lazos", "Producto"],
+    pares.map(c => [`<td class="simb">${c.map(i => A.L[i].simbolo).join(" · ")}</td>`,
+                    `<td class="exp">${esc(producto(c.map(i => A.L[i].gan)))}</td>`]))
+    : `<div class="nada">No hay dos lazos que no se toquen.</div>`;
+
+  // si además hay grupos de tres o más, se muestran, porque entran en Δ
+  const ordenes = Object.keys(A.det.combos).map(Number).filter(k => k >= 3).sort((a, b) => a - b);
+  for (const k of ordenes) {
+    h += `<h4>3.${k - 1} · Lazos disjuntos tomados de a ${k}</h4>`;
+    h += tabla(["Lazos", "Producto"], A.det.combos[k].map(c =>
+      [`<td class="simb">${c.map(i => A.L[i].simbolo).join(" · ")}</td>`,
+       `<td class="exp">${esc(producto(c.map(i => A.L[i].gan)))}</td>`]));
+  }
+
+  h += `<h4>4 · Determinante y cofactores</h4>`;
+  // los números sólo tienen sentido si todas las transmitancias son números
+  const todoNumerico = A.L.every(l => l.valor !== null) && A.P.every(p => p.valor !== null)
+    && (A.L.length + A.P.length) > 0;
+  const dTexto = textoDelta(A.L, A.det);
+  const dValor = todoNumerico ? valorDelta(A.L, A.det) : null;
+  h += `<div class="caja">Δ = ${esc(dTexto)}${dValor === null ? "" : `<br>Δ = ${redondear(dValor)}`}</div>`;
+  if (A.cof.length) {
+    h += tabla(["", "Cofactor", "Lazos que no la tocan"], A.cof.map((c, i) => {
+      const t = textoDelta(c.libres, c.det);
+      const v = todoNumerico ? valorDelta(c.libres, c.det) : null;
+      return [`<td class="simb">Δ${sub(i + 1)}</td>`,
+              `<td class="exp">${esc(t)}${v === null ? "" : ` &nbsp;=&nbsp; ${redondear(v)}`}</td>`,
+              `<td class="ruta">${c.libres.length ? c.libres.map(l => l.simbolo).join(", ") : "ninguno"}</td>`];
+    }));
+  }
+
+  h += `<h4>5 · Función de transferencia</h4>`;
+  if (!A.P.length) {
+    h += `<div class="nada">Sin trayectorias directas no hay función de transferencia.</div>`;
+  } else {
+    const num = A.P.map((p, i) => {
+      const dk = textoDelta(A.cof[i].libres, A.cof[i].det);
+      return dk === "1" ? p.simbolo : `${p.simbolo}·Δ${sub(i + 1)}`;
+    }).join(" + ");
+    const numDes = A.P.map((p, i) => {
+      const dk = textoDelta(A.cof[i].libres, A.cof[i].det);
+      return dk === "1" ? p.gan : `${envolver(p.gan)}·${envolver(dk)}`;
+    }).join(" + ");
+    h += `<div class="caja resultado">${esc(A.salida.nombre)} / ${esc(A.entrada.nombre)}
+      = ( ${esc(num)} ) / Δ<br><br>= ( ${esc(numDes)} ) / ( ${esc(dTexto)} )`;
+    const vs = A.P.map((p, i) => {
+      const dv = todoNumerico ? valorDelta(A.cof[i].libres, A.cof[i].det) : null;
+      return (p.valor === null || dv === null) ? null : p.valor * dv;
+    });
+    if (dValor !== null && dValor !== 0 && !vs.some(v => v === null))
+      h += `<br><br>= ${redondear(vs.reduce((a, b) => a + b, 0) / dValor)}`;
+    h += `</div>`;
+  }
+  body.innerHTML = h;
+  $("#ov-mason").classList.add("show");
+}
+function htmlEcuaciones() {
+  const eqs = ecuaciones();
+  if (!eqs.length) return `<h4>Sistema de ecuaciones</h4><div class="nada">Todavía no hay nodos.</div>`;
+  return `<h4>Sistema de ecuaciones</h4><div class="caja eq">` +
+    eqs.map(e => esc(e.texto)).join("<br>") + `</div>`;
+}
+function tabla(cabeceras, filas) {
+  return `<table><thead><tr>${cabeceras.map(c => `<th>${c}</th>`).join("")}</tr></thead><tbody>` +
+    filas.map(f => `<tr>${f.join("")}</tr>`).join("") + `</tbody></table>`;
+}
+const SUBS = "₀₁₂₃₄₅₆₇₈₉";
+const sub = (n) => String(n).split("").map(d => SUBS[+d] || d).join("");
+const envolver = (s) => /^[-+]?[\w.·()]+$/.test(s) && !/[+−]/.test(s) ? s : "(" + s + ")";
+const redondear = (v) => Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v.toFixed(4).replace(/0+$/, "");
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+/* ======================= panel derecho ======================= */
+let inspLock = false;
+function renderInspector() {
+  if (inspLock) return;
+  const box = $("#insp");
+  const nsel = S.sel.map(getNodo).filter(Boolean);
+  const rsel = S.selR.map(getRama).filter(Boolean);
+  let h = "";
+
+  if (rsel.length) {
+    const r = rsel[0];
+    h += `<div class="sec"><h3>Rama (${rsel.length})</h3>
+      <div class="row"><label>Transmitancia</label><div class="fill">
+        <input type="text" id="r-g" value="${esc(r.g)}" placeholder="G_1, -H, 1/s, 2.5"></div></div>
+      <div class="row"><label>Curvatura</label><div class="fill">
+        <input type="number" id="r-curva" step="6" value="${Math.round(r.curva)}"></div></div>
+      <div class="row"><label>Va de</label><div class="fill">
+        <select id="r-de">${opcionesNodo(r.de)}</select></div></div>
+      <div class="row"><label>Hasta</label><div class="fill">
+        <select id="r-a">${opcionesNodo(r.a)}</select></div></div>
+      <div class="iconbar" style="margin-top:10px">
+        <button class="btn" id="r-invertir">Invertir sentido</button>
+        <button class="btn" id="r-espejo">Arquear al otro lado</button>
+        <button class="btn" id="r-del">Borrar</button></div>
+      <div class="hint" style="margin-top:8px">La transmitancia multiplica a la variable del nodo del
+        que sale. Con <b>_</b> escribís subíndices: <b>G_1</b> se dibuja G₁.</div></div>`;
+  }
+
+  if (nsel.length) {
+    const n = nsel[0];
+    h += `<div class="sec"><h3>Nodo (${nsel.length})</h3>
+      <div class="row"><label>Nombre</label><div class="fill">
+        <input type="text" id="n-nombre" value="${esc(n.nombre)}" placeholder="x_1, R, C"></div></div>
+      <div class="row"><label>Papel</label><div class="fill"><select id="n-tipo">
+        <option value="normal"${n.tipo === "normal" ? " selected" : ""}>Nodo interno</option>
+        <option value="entrada"${n.tipo === "entrada" ? " selected" : ""}>Entrada del sistema</option>
+        <option value="salida"${n.tipo === "salida" ? " selected" : ""}>Salida del sistema</option>
+      </select></div></div>
+      <div class="row"><label>Posición</label><div class="fill grid2">
+        <input type="number" id="n-x" step="${S.grid}" value="${Math.round(n.x)}">
+        <input type="number" id="n-y" step="${S.grid}" value="${Math.round(n.y)}"></div></div>
+      <div class="iconbar" style="margin-top:10px">
+        <button class="btn" id="n-auto">Autolazo</button>
+        <button class="btn" id="n-del">Borrar</button></div>
+      <div class="hint" style="margin-top:8px">Sólo puede haber una entrada y una salida: al marcar
+        una, la anterior vuelve a ser nodo interno.</div></div>`;
+  }
+
+  h += resumenMason();
+  if (!nsel.length && !rsel.length)
+    h += `<div class="empty">Nada seleccionado.<br>Elegí un nodo o una rama para editarlo.<br><br>
+      <span style="font-size:11px">En modo Conectar, arrastrá de un nodo a otro.</span></div>`;
+  box.innerHTML = h;
+  wireInspector(nsel, rsel);
+}
+const opcionesNodo = (v) => S.nodos.map(n =>
+  `<option value="${n.id}"${n.id === v ? " selected" : ""}>${esc(n.nombre)}</option>`).join("");
+
+function resumenMason() {
+  const A = analizar();
+  if (!S.nodos.length) return "";
+  const filas = [
+    ["Trayectorias", A.P.length],
+    ["Lazos", A.L.length],
+    ["Disjuntos de a dos", (A.det.combos[2] || []).length]
+  ];
+  return `<div class="sec"><h3>Mason</h3>` +
+    filas.map(f => `<div class="row"><label>${f[0]}</label><div class="fill"
+      style="font-family:var(--mono);font-size:12px">${f[1]}</div></div>`).join("") +
+    `<div class="iconbar" style="margin-top:10px">
+      <button class="btn on" id="b-mason2" style="width:100%">Ver el análisis completo</button></div>
+    <div class="hint" style="margin-top:8px">${A.entrada && A.salida
+      ? "Ecuaciones, cofactores y función de transferencia."
+      : "Marcá un nodo como entrada y otro como salida para que se pueda calcular."}</div></div>`;
+}
+function lock(fn) { inspLock = true; try { fn(); } finally { inspLock = false; } }
+function wireInspector(nsel, rsel) {
+  const live = (id, fn) => {
+    const e = document.getElementById(id); if (!e) return;
+    e.addEventListener("input", () => lock(() => { fn(e.value); render(); }));
+    e.addEventListener("change", () => { fn(e.value); commit(); render(); });
+    e.addEventListener("keydown", ev => ev.stopPropagation());
+  };
+  live("r-g", v => rsel.forEach(r => r.g = v));
+  live("r-curva", v => rsel.forEach(r => r.curva = +v || 0));
+  live("n-nombre", v => nsel.forEach(n => n.nombre = v));
+  live("n-x", v => nsel.forEach(n => n.x = +v));
+  live("n-y", v => nsel.forEach(n => n.y = +v));
+
+  const tipo = document.getElementById("n-tipo");
+  if (tipo) tipo.onchange = () => {
+    const v = tipo.value;
+    if (v !== "normal") S.nodos.forEach(n => { if (n.tipo === v) n.tipo = "normal"; });
+    nsel.forEach(n => n.tipo = v);
+    commit(); render();
+  };
+  const de = document.getElementById("r-de"), a = document.getElementById("r-a");
+  if (de) de.onchange = () => { rsel.forEach(r => r.de = de.value); commit(); render(); };
+  if (a) a.onchange = () => { rsel.forEach(r => r.a = a.value); commit(); render(); };
+
+  const bind = (id, fn) => { const e = document.getElementById(id); if (e) e.onclick = () => { fn(); commit(); render(); }; };
+  bind("r-invertir", () => rsel.forEach(r => { const t = r.de; r.de = r.a; r.a = t; r.curva = -r.curva; }));
+  bind("r-espejo", () => rsel.forEach(r => r.curva = -r.curva));
+  bind("r-del", borrar);
+  bind("n-del", borrar);
+  bind("n-auto", () => nsel.forEach(n => S.ramas.push(nuevaRama(n.id, n.id, { g: "G" }))));
+  const m = document.getElementById("b-mason2");
+  if (m) m.onclick = mostrarMason;
+}
+
+/* ======================= historial ======================= */
+const docDatos = () => ({ nombre: limpiarNombre(S.nombre), nodos: S.nodos, ramas: S.ramas });
+let undoStack = [], redoStack = [], lastSnap = null;
+const snapshot = () => JSON.stringify(Object.assign(docDatos(), { uidc }));
+function restore(js) {
+  const d = JSON.parse(js);
+  S.nodos = d.nodos; S.ramas = d.ramas; uidc = d.uidc || uidc;
+  S.nombre = d.nombre || S.nombre;
+  S.sel = S.sel.filter(getNodo); S.selR = S.selR.filter(getRama);
+}
+function commit() {
+  const s = snapshot();
+  if (s === lastSnap) return;
+  if (lastSnap !== null) { undoStack.push(lastSnap); if (undoStack.length > 120) undoStack.shift(); }
+  redoStack = []; lastSnap = s;
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  const s = undoStack.pop(); restore(s); lastSnap = s; render();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  const s = redoStack.pop(); restore(s); lastSnap = s; render();
+}
+function borrar() {
+  const ids = new Set(S.sel);
+  S.nodos = S.nodos.filter(n => !ids.has(n.id));
+  S.ramas = S.ramas.filter(r => !ids.has(r.de) && !ids.has(r.a) && !S.selR.includes(r.id));
+  S.sel = []; S.selR = [];
+}
+
+/* ======================= interacción ======================= */
+let drag = null, spaceDown = false, modo = "select", pendiente = null;
+function toWorld(ev) {
+  const r = svg.getBoundingClientRect();
+  return { x: (ev.clientX - r.left - S.pan.x) / S.zoom, y: (ev.clientY - r.top - S.pan.y) / S.zoom };
+}
+const idDeNodo = (t) => { const g = t.closest ? t.closest("[data-id]") : null; return g && g.getAttribute("data-id"); };
+const idDeRama = (t) => { const g = t.closest ? t.closest("[data-rid]") : null; return g && g.getAttribute("data-rid"); };
+
+function setModo(m) {
+  modo = m;
+  svg.classList.toggle("mode-connect", m === "connect");
+  $("#m-select").classList.toggle("on", m === "select");
+  $("#m-connect").classList.toggle("on", m === "connect");
+  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un nodo a otro para dibujar la rama" : "";
+}
+function setPendiente(t) {
+  pendiente = t;
+  document.querySelectorAll(".ptool").forEach(b => b.classList.toggle("on", b.dataset.add === t));
+  $("#st-hint").textContent = t ? "Hacé clic en la hoja para poner el nodo · Esc cancela" : "";
+}
+svg.addEventListener("pointerdown", ev => {
+  if (ev.button === 1 || spaceDown) {
+    drag = { kind: "pan", x0: ev.clientX, y0: ev.clientY, p0: Object.assign({}, S.pan) };
+    svg.classList.add("panning"); svg.setPointerCapture(ev.pointerId); return;
+  }
+  if (ev.button !== 0) return;
+  const w = toWorld(ev), t = ev.target;
+  svg.setPointerCapture(ev.pointerId);
+
+  if (pendiente === "nodo") {
+    const n = nuevoNodo(snapV(w.x), snapV(w.y));
+    S.nodos.push(n); S.sel = [n.id]; S.selR = [];
+    setPendiente(null); commit(); render(); return;
+  }
+  const nid = idDeNodo(t);
+  if (nid) {
+    if (modo === "connect") {
+      drag = { kind: "connect", fromId: nid, cur: w };
+      render(); return;
+    }
+    if (ev.shiftKey) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
+    else if (!S.sel.includes(nid)) { S.sel = [nid]; S.selR = []; }
+    drag = { kind: "move", w0: w, orig: S.sel.map(id => { const n = getNodo(id); return { id, x: n.x, y: n.y }; }) };
+    render(); return;
+  }
+  const rid = idDeRama(t) || (ramaCerca(w) || {}).id;
+  if (rid) {
+    if (ev.shiftKey) S.selR = S.selR.includes(rid) ? S.selR.filter(x => x !== rid) : S.selR.concat(rid);
+    else { S.selR = [rid]; S.sel = []; }
+    render(); return;
+  }
+  if (!ev.shiftKey) { S.sel = []; S.selR = []; }
+  drag = { kind: "band", band: { x1: w.x, y1: w.y, x2: w.x, y2: w.y } };
+  render();
+});
+svg.addEventListener("pointermove", ev => {
+  if (!drag) return;
+  const w = toWorld(ev);
+  if (drag.kind === "pan") {
+    S.pan.x = drag.p0.x + (ev.clientX - drag.x0);
+    S.pan.y = drag.p0.y + (ev.clientY - drag.y0);
+    render(); return;
+  }
+  if (drag.kind === "move") {
+    const dx = w.x - drag.w0.x, dy = w.y - drag.w0.y;
+    drag.orig.forEach(o => { const n = getNodo(o.id); if (n) { n.x = snapV(o.x + dx); n.y = snapV(o.y + dy); } });
+    render(); return;
+  }
+  if (drag.kind === "connect") { drag.cur = w; render(); return; }
+  if (drag.kind === "band") { drag.band.x2 = w.x; drag.band.y2 = w.y; render(); return; }
+});
+svg.addEventListener("pointerup", ev => {
+  if (!drag) return;
+  const w = toWorld(ev);
+  if (drag.kind === "connect") {
+    const t = document.elementFromPoint(ev.clientX, ev.clientY);
+    const destino = t ? idDeNodo(t) : null;
+    if (destino) {
+      const r = nuevaRama(drag.fromId, destino, { g: destino === drag.fromId ? "G" : "G" });
+      S.ramas.push(r); S.selR = [r.id]; S.sel = [];
+      commit();
+    }
+  }
+  if (drag.kind === "band") {
+    const b = drag.band;
+    const l = Math.min(b.x1, b.x2), r = Math.max(b.x1, b.x2);
+    const t = Math.min(b.y1, b.y2), bo = Math.max(b.y1, b.y2);
+    if (Math.abs(r - l) > 4 || Math.abs(bo - t) > 4)
+      S.sel = S.nodos.filter(n => n.x >= l && n.x <= r && n.y >= t && n.y <= bo).map(n => n.id);
+  }
+  if (drag.kind === "move") commit();
+  svg.classList.remove("panning");
+  drag = null; render();
+});
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  if (ev.ctrlKey || ev.metaKey) {
+    const r = svg.getBoundingClientRect();
+    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    const antes = S.zoom;
+    S.zoom = Math.max(.2, Math.min(4, S.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+    S.pan.x = mx - (mx - S.pan.x) * (S.zoom / antes);
+    S.pan.y = my - (my - S.pan.y) * (S.zoom / antes);
+  } else if (ev.shiftKey) { S.pan.x -= ev.deltaY; }
+  else { S.pan.x -= ev.deltaX; S.pan.y -= ev.deltaY; }
+  render();
+}, { passive: false });
+
+window.addEventListener("keydown", ev => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
+  const k = ev.key.toLowerCase();
+  if (ev.code === "Space") { spaceDown = true; ev.preventDefault(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "y") { ev.preventDefault(); redo(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && k === "a") { ev.preventDefault(); S.sel = S.nodos.map(n => n.id); render(); return; }
+  if (ev.ctrlKey || ev.metaKey) return;
+  if (k === "delete" || k === "backspace") { ev.preventDefault(); borrar(); commit(); render(); return; }
+  if (k === "escape") { setPendiente(null); S.sel = []; S.selR = [];
+    document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show")); render(); return; }
+  if (k === "n") return setPendiente("nodo");
+  if (k === "v") return setModo("select");
+  if (k === "c") return setModo("connect");
+  if (k === "a") return mostrarMason();
+  if (k === "f") return fit();
+  if (k === "?") return $("#ov-help").classList.add("show");
+  if (ev.key.startsWith("Arrow") && S.sel.length) {
+    ev.preventDefault();
+    const d = ev.shiftKey ? 1 : S.grid;
+    const dx = ev.key === "ArrowLeft" ? -d : ev.key === "ArrowRight" ? d : 0;
+    const dy = ev.key === "ArrowUp" ? -d : ev.key === "ArrowDown" ? d : 0;
+    S.sel.map(getNodo).forEach(n => { if (n) { n.x += dx; n.y += dy; } });
+    render(); clearTimeout(window._kt); window._kt = setTimeout(commit, 400);
+  }
+});
+window.addEventListener("keyup", ev => { if (ev.code === "Space") spaceDown = false; });
+
+function fit() {
+  if (!S.nodos.length) { S.zoom = 1; S.pan = { x: 90, y: 70 }; render(); return; }
+  const b = bboxAll(), r = svg.getBoundingClientRect(), m = 60;
+  S.zoom = Math.max(.2, Math.min((r.width - m * 2) / Math.max(1, b.r - b.l),
+                                 (r.height - m * 2) / Math.max(1, b.b - b.t), 2));
+  S.pan.x = (r.width - (b.r - b.l) * S.zoom) / 2 - b.l * S.zoom;
+  S.pan.y = (r.height - (b.b - b.t) * S.zoom) / 2 - b.t * S.zoom;
+  render();
+}
+function toast(m) {
+  const t = $("#toast"); t.textContent = m; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1900);
+}
+
+/* ======================= exportar y abrir ======================= */
+function buildExportSVG() {
+  const b = bboxAll(), m = 30;
+  const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
+  const s = document.createElementNS(NS, "svg");
+  s.setAttribute("width", W); s.setAttribute("height", H);
+  s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
+  const meta = document.createElementNS(NS, "metadata");
+  meta.setAttribute("id", "uni-tools-datos");
+  meta.textContent = JSON.stringify(docDatos());
+  s.appendChild(meta);
+  const st = document.createElementNS(NS, "style");
+  st.textContent = `svg{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#fff}
+    .n-dot{fill:#101418}.n-io{fill:#fff;stroke:#101418;stroke-width:2}
+    .n-name{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central;font-size:13px}
+    .n-rol{font-family:monospace;fill:#93a0ae;text-anchor:middle;dominant-baseline:central;font-size:8.5px}
+    .r-linea{fill:none;stroke:#101418;stroke-width:1.6;stroke-linecap:round}
+    .r-punta{fill:#101418}.io-stub{stroke:#101418;stroke-width:1.6;fill:none}
+    .r-lab{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central;font-size:13px}
+    .r-lab-bg{fill:#fff}`;
+  s.appendChild(st);
+  const bg = document.createElementNS(NS, "rect");
+  bg.setAttribute("x", b.l - m); bg.setAttribute("y", b.t - m);
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#fff");
+  s.appendChild(bg);
+  const sn = S.sel, sr = S.selR; S.sel = []; S.selR = []; render();
+  const gr = gRamas.cloneNode(true), gn = gNodos.cloneNode(true);
+  gr.querySelectorAll(".r-hit").forEach(x => x.remove());
+  gn.querySelectorAll(".n-hit").forEach(x => x.remove());
+  s.appendChild(gr); s.appendChild(gn);
+  S.sel = sn; S.selR = sr; render();
+  return { svg: s, W, H };
+}
+function download(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+function cargarDoc(d, desdeArchivo) {
+  S.nodos = d.nodos || []; S.ramas = d.ramas || [];
+  S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
+  uidc = S.nodos.length + S.ramas.length + 100;
+  S.sel = []; S.selR = [];
+}
+function datosDeSVG(txt) {
+  const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+  if (doc.querySelector("parsererror")) throw new Error("no es un SVG válido");
+  const m = doc.querySelector("metadata#uni-tools-datos");
+  if (!m || !m.textContent.trim()) throw new Error("ese SVG no trae los datos del diagrama");
+  return JSON.parse(m.textContent);
+}
+function abrirTexto(txt, nombreDelArchivo) {
+  const t = String(txt || "").trim();
+  if (!t) return toast("No hay nada para abrir");
+  let d;
+  try { d = t[0] === "{" ? JSON.parse(t) : datosDeSVG(t); }
+  catch (e) {
+    return toast(/metadata|datos/.test(e.message)
+      ? "Ese SVG no trae los datos del diagrama: se exportó con otra herramienta"
+      : "Ese archivo no se pudo leer");
+  }
+  if (!d || !Array.isArray(d.nodos)) return toast("Ese archivo no tiene un diagrama de flujo adentro");
+  cargarDoc(d, nombreDelArchivo && nombreDelArchivo.replace(/\.(json|svg)$/i, ""));
+  commit(); fit();
+  $("#ov-io").classList.remove("show");
+  toast("Diagrama cargado");
+}
+
+/* ======================= barra ======================= */
+$("#m-select").onclick = () => setModo("select");
+$("#m-connect").onclick = () => setModo("connect");
+$("#b-undo").onclick = undo;
+$("#b-redo").onclick = redo;
+$("#b-del").onclick = () => { borrar(); commit(); render(); };
+$("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
+$("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
+$("#b-fit").onclick = fit;
+$("#b-gridshow").onclick = () => { S.showGrid = !S.showGrid; render(); };
+$("#b-mason").onclick = mostrarMason;
+$("#b-help").onclick = () => $("#ov-help").classList.add("show");
+$("#b-clear").onclick = () => {
+  if (!S.nodos.length || confirm("¿Vaciar el diagrama?")) {
+    S.nodos = []; S.ramas = []; S.sel = []; S.selR = []; commit(); render();
+  }
+};
+$("#b-svg").onclick = () => {
+  if (!S.nodos.length) return toast("El diagrama está vacío");
+  download(nombreArchivo("svg"),
+    new Blob([new XMLSerializer().serializeToString(buildExportSVG().svg)], { type: "image/svg+xml" }));
+  toast("SVG descargado");
+};
+$("#b-png").onclick = () => {
+  if (!S.nodos.length) return toast("El diagrama está vacío");
+  const { svg: s, W, H } = buildExportSVG();
+  const img = new Image();
+  img.onload = () => {
+    const sc = 3, c = document.createElement("canvas");
+    c.width = W * sc; c.height = H * sc;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(bl => { download(nombreArchivo("png"), bl); toast("PNG descargado (3×)"); });
+  };
+  img.onerror = () => toast("No se pudo generar el PNG");
+  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s))));
+};
+$("#b-save").onclick = () => {
+  download(nombreArchivo("json"), new Blob([JSON.stringify(docDatos(), null, 1)], { type: "application/json" }));
+  toast("Diagrama guardado");
+};
+$("#b-open").onclick = () => {
+  $("#io-text").value = ""; $("#io-file").value = "";
+  $("#io-file-nom").textContent = "Ningún archivo elegido";
+  $("#ov-io").classList.add("show");
+};
+$("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
+$("#io-file-btn").onclick = () => $("#io-file").click();
+$("#io-file").onchange = (ev) => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  $("#io-file-nom").textContent = f.name;
+  const r = new FileReader();
+  r.onload = () => abrirTexto(r.result, f.name);
+  r.onerror = () => toast("No se pudo leer el archivo");
+  r.readAsText(f);
+};
+$("#io-ok").onclick = () => abrirTexto($("#io-text").value);
+$("#b-nombre").addEventListener("input", () => {
+  S.nombre = $("#b-nombre").value;
+  document.title = limpiarNombre(S.nombre) + " · Diagramas de flujo de señales";
+});
+$("#b-nombre").addEventListener("change", () => {
+  S.nombre = limpiarNombre($("#b-nombre").value);
+  $("#b-nombre").value = S.nombre; commit();
+});
+$("#b-nombre").addEventListener("keydown", ev => ev.stopPropagation());
+document.querySelectorAll(".ptool").forEach(b =>
+  b.onclick = () => setPendiente(pendiente === b.dataset.add ? null : b.dataset.add));
+document.querySelectorAll(".overlay").forEach(o =>
+  o.addEventListener("click", e => { if (e.target === o) o.classList.remove("show"); }));
+document.querySelectorAll(".glab").forEach(g =>
+  g.addEventListener("click", () => g.parentElement.classList.toggle("collapsed")));
+const togglePanelBtn = $("#b-toggle-panel"), inspectorPanel = $("#inspector");
+togglePanelBtn.addEventListener("click", () => {
+  inspectorPanel.classList.toggle("collapsed");
+  togglePanelBtn.classList.toggle("on", !inspectorPanel.classList.contains("collapsed"));
+  setTimeout(render, 210);
+});
+
+/* ======================= ejemplos ======================= */
+$("#ejemplos").onchange = e => { if (e.target.value) { cargarEjemplo(e.target.value); e.target.value = ""; } };
+function cargarEjemplo(cual) {
+  S.nodos = []; S.ramas = []; S.sel = []; S.selR = []; uidc = 1;
+  const K = {};
+  const nodo = (k, nombre, x, y, tipo) => {
+    const n = nuevoNodo(x, y, { nombre, tipo: tipo || "normal" });
+    K[k] = n.id; S.nodos.push(n); return n;
+  };
+  const rama = (a, b, g, curva) => S.ramas.push(nuevaRama(K[a], K[b], curva === undefined ? { g } : { g, curva }));
+
+  if (cual === "simple") {
+    nodo("R", "R", 0, 0, "entrada"); nodo("x1", "x_1", 180, 0); nodo("x2", "x_2", 380, 0);
+    nodo("C", "C", 560, 0, "salida");
+    rama("R", "x1", "1"); rama("x1", "x2", "G_1"); rama("x2", "C", "G_2");
+    rama("x2", "x1", "-H", -60);
+  } else if (cual === "dos") {
+    nodo("R", "R", 0, 0, "entrada"); nodo("x1", "x_1", 180, 0); nodo("x2", "x_2", 380, 0);
+    nodo("x3", "x_3", 560, 0); nodo("C", "C", 740, 0, "salida");
+    rama("R", "x1", "1"); rama("x1", "x2", "G_1"); rama("x2", "x3", "G_2"); rama("x3", "C", "1");
+    rama("x2", "x1", "-H_1", -60); rama("x3", "x2", "-H_2", -60);
+  } else if (cual === "disjuntos") {
+    nodo("R", "R", 0, 0, "entrada"); nodo("x1", "x_1", 180, 0); nodo("x2", "x_2", 360, 0);
+    nodo("x3", "x_3", 540, 0); nodo("x4", "x_4", 720, 0); nodo("C", "C", 900, 0, "salida");
+    rama("R", "x1", "1"); rama("x1", "x2", "G_1"); rama("x2", "x3", "G_2");
+    rama("x3", "x4", "G_3"); rama("x4", "C", "1");
+    rama("x2", "x1", "-H_1", -60); rama("x4", "x3", "-H_2", -60);
+  } else if (cual === "dostray") {
+    nodo("R", "R", 0, 0, "entrada"); nodo("x1", "x_1", 200, 0); nodo("x2", "x_2", 440, 0);
+    nodo("C", "C", 660, 0, "salida");
+    rama("R", "x1", "1"); rama("x1", "x2", "G_1"); rama("x1", "x2", "G_2", -80);
+    rama("x2", "C", "1"); rama("x2", "x1", "-H", -140);
+  }
+  commit(); fit();
+}
+
+/* ======================= arranque ======================= */
+setModo("select");
+cargarEjemplo("dos");
+lastSnap = snapshot();
+window.addEventListener("resize", render);
+</script>
+</body>
+</html>
