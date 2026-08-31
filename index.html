@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Simuladores</title>
+<title>uni-tools · Simuladores</title>
+<link rel="icon" type="image/png" href="uni-tools-marca.png">
 
 <!-- ==========================================================
      ESTILOS
@@ -34,10 +35,14 @@ body{
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-h1{
-  margin: 0;
-  font-size: 26px;
-  letter-spacing: -0.02em;
+/* El logo hace de título: ya dice el nombre y de qué va el proyecto */
+h1.marca{
+  margin: 0 0 4px;
+}
+h1.marca img{
+  display: block;
+  width: min(440px, 82vw);
+  height: auto;
 }
 
 p.bajada{
@@ -100,7 +105,10 @@ a.boton .flecha{
 
 <body>
 
-  <h1>Simuladores</h1>
+  <h1 class="marca">
+    <img src="uni-tools-logo.png"
+         alt="uni-tools — Simulación y creación de diagramas lógicos, de bloques y de señales">
+  </h1>
   <p class="bajada">Elegí con cuál querés trabajar</p>
 
   <!-- ==========================================================
