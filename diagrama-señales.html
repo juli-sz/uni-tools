@@ -134,6 +134,10 @@ kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line
   font-family:var(--mono);font-size:13px;overflow-x:auto}
 .caja.resultado{border-color:#b9d2ff;background:var(--accent-soft)}
 .nada{color:#8a97a5;font-size:12px;padding:4px 0}
+/* vista previa del diagrama de bloques equivalente */
+.previo{border:1px solid var(--line);border-radius:10px;background:var(--paper);
+  padding:10px;overflow-x:auto}
+.previo svg{display:block;max-width:100%;height:auto}
 textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
   border-radius:8px;padding:8px;resize:vertical}
 .filebox{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:10px;padding:16px}
@@ -750,6 +754,210 @@ function ecuaciones() {
   });
 }
 
+/* ======================= diagrama de bloques equivalente =======================
+   El grafo y el diagrama de bloques dicen lo mismo de dos formas: un nodo con
+   varias ramas que entran es un sumador, una rama con transmitancia distinta de 1
+   es un bloque, y un nodo del que salen varias ramas es un punto de bifurcación.
+   El resultado sale en el mismo formato que usa "Diagramas de bloques", así que
+   el JSON se abre allá y se puede seguir editando. */
+const MENOS = "−";
+const aGrilla = (v) => Math.round(v / 20) * 20;
+const ANCHO_BLOQUE = 72, ALTO_BLOQUE = 42;
+/* El aire se mide en cuadraditos de la grilla: uno solo de margen entre cualquier
+   cosa y la de al lado alcanza para que se lea prolijo sin quedar desparramado. */
+const AIRE = 20, MEDIO_SUMA = 25, MEDIO_PUNTO = 5;
+const SALTO_BIF = 60;                          // del sumador a su punto de bifurcación
+/* Centra el bloque en el hueco que queda entre dos elementos, pegado a la grilla,
+   pero sin dejar que el redondeo le coma el cuadradito de margen a ningún lado. */
+function enElHueco(A, B) {
+  const desde = A.x + A.w / 2, hasta = B.x - B.w / 2;
+  const min = desde + AIRE + ANCHO_BLOQUE / 2, max = hasta - AIRE - ANCHO_BLOQUE / 2;
+  if (min > max) return (desde + hasta) / 2;   // no entra: al menos que quede centrado
+  return Math.min(Math.max(aGrilla((desde + hasta) / 2), min), max);
+}
+/* Por dónde sale y por dónde entra cada rama. La recta va por la línea principal;
+   los arcos de ida —los prealimentados— por arriba, y los de vuelta por abajo.
+   Esto es lo que decide en qué pata del sumador cae cada signo. */
+function ladoDeRama(r) {
+  if (r.de === r.a) return "b";
+  const A = getNodo(r.de), B = getNodo(r.a);
+  if (!A || !B) return "recto";
+  if (!r.curva) return B.x >= A.x ? "recto" : "b";
+  return B.x >= A.x ? "t" : "b";
+}
+function equivalenteEnBloques() {
+  const nodes = [], edges = [];
+  let c = 0;
+  const nid = () => "bn" + (++c), eid = () => "be" + (++c);
+  const entraEn = new Map(), saleDe = new Map();   // nodo del grafo -> dónde llega / de dónde sale
+  const puerto = new Map();                       // rama -> pata por la que entra
+
+  // Escala horizontal: en el tramo más corto tienen que entrar, uno atrás del otro,
+  // la bifurcación que a veces sigue al sumador, el bloque, y aire a los costados.
+  let paso = Infinity;
+  for (const r of S.ramas) {
+    const A = getNodo(r.de), B = getNodo(r.a);
+    if (A && B && r.de !== r.a && Math.abs(B.x - A.x) > 1) paso = Math.min(paso, Math.abs(B.x - A.x));
+  }
+  if (!isFinite(paso)) paso = 140;
+  // el tramo más corto tiene que aguantar, en fila: la bifurcación que a veces sigue
+  // al sumador, un cuadradito de aire, el bloque, otro cuadradito, y medio sumador.
+  // El tercer AIRE es para que el redondeo a la grilla no se coma el margen.
+  const TRAMO = SALTO_BIF + MEDIO_PUNTO + ANCHO_BLOQUE + MEDIO_SUMA + 3 * AIRE;
+  const escX = Math.max(1.4, TRAMO / paso), escY = Math.min(escX, 2.4);
+  const gx = (v) => aGrilla(v * escX), gy = (v) => aGrilla(v * escY);
+
+  // Los arcos se ordenan por profundidad: cuanto más lejos van, más afuera se dibujan
+  const magnitudes = Array.from(new Set(S.ramas.filter(r => r.curva).map(r => Math.abs(r.curva))))
+    .sort((a, b) => a - b);
+  const nivelDe = (r) => Math.max(0, magnitudes.indexOf(Math.abs(r.curva)));
+
+  const agregar = (e) => { nodes.push(e); return e; };
+  const unir = (A, pA, B, pB) =>
+    edges.push({ id: eid(), from: { id: A.id, port: pA }, to: { id: B.id, port: pB }, variant: 0 });
+
+  for (const n of S.nodos) {
+    const ent = S.ramas.filter(r => r.a === n.id);
+    const sal = S.ramas.filter(r => r.de === n.id);
+    const x = gx(n.x), y = gy(n.y);
+    const base = () => ({ id: nid(), x, y, label: "", font: 14 });
+    let llega, parte;
+    if (n.tipo !== "normal" || !ent.length) {      // entrada, salida o nodo sin nada que le entre
+      llega = parte = agregar(Object.assign(base(), { type: "io", w: 46, h: 22, label: n.nombre }));
+    } else if (ent.length >= 2) {                  // varias ramas entrando: sumador
+      const signos = { l: "", t: "", r: "", b: "" };
+      const prefe = { recto: ["l", "t", "b", "r"], t: ["t", "l", "b", "r"], b: ["b", "l", "t", "r"] };
+      for (const r of ent) {                       // cada rama entra por la pata de su lado
+        const p = (prefe[ladoDeRama(r)] || prefe.recto).find(q => !signos[q]) || "l";
+        signos[p] = /^\s*-/.test(String(r.g)) ? MENOS : "+";
+        puerto.set(r.id, p);
+      }
+      llega = parte = agregar(Object.assign(base(),
+        { type: "sum", w: 50, h: 50, font: 13, signs: signos, cross: true }));
+      if (sal.length >= 2) {                       // y si además reparte, va un punto de bifurcación
+        parte = agregar(Object.assign(base(), { type: "node", w: 10, h: 10, x: x + SALTO_BIF }));
+        unir(llega, "r", parte, "l");
+      }
+    } else {                                       // una sola entrada: un punto sobre la línea
+      llega = parte = agregar(Object.assign(base(), { type: "node", w: 10, h: 10 }));
+    }
+    entraEn.set(n.id, llega); saleDe.set(n.id, parte);
+  }
+
+  for (const r of S.ramas) {
+    const A = saleDe.get(r.de), B = entraEn.get(r.a);
+    if (!A || !B) continue;
+    const g = String(r.g == null ? "1" : r.g).trim();
+    const alSumador = B.type === "sum";
+    // si el destino es un sumador, el signo se lo queda el sumador y el bloque va en positivo
+    const etiqueta = (alSumador && /^-/.test(g)) ? g.slice(1).trim() : g;
+    const lado = ladoDeRama(r);
+    const pSal = lado === "recto" ? "r" : lado;
+    const pEnt = alSumador ? (puerto.get(r.id) || "l") : (lado === "recto" ? "l" : lado);
+    if (etiqueta === "1" || etiqueta === "") {      // transmitancia 1: línea pelada, sin bloque
+      unir(A, pSal, B, pEnt);
+      continue;
+    }
+    // fuera de la línea principal: un cuadradito libre contra la línea, y otro
+    // entre un nivel de arcos y el siguiente
+    const hueco = 4 * AIRE + nivelDe(r) * (ALTO_BLOQUE + 2 * AIRE);
+    // en la línea principal el bloque va centrado en el hueco libre, no entre los
+    // centros: si al sumador le sigue una bifurcación, el hueco arranca después de ella
+    const bl = agregar({
+      id: nid(), type: "block", w: ANCHO_BLOQUE, h: ALTO_BLOQUE, font: 15, label: etiqueta,
+      x: r.de === r.a ? A.x : lado === "recto" ? enElHueco(A, B) : aGrilla((A.x + B.x) / 2),
+      y: lado === "recto" ? aGrilla((A.y + B.y) / 2)
+        : lado === "t" ? aGrilla(Math.min(A.y, B.y) - hueco)
+        : aGrilla(Math.max(A.y, B.y) + hueco)
+    });
+    // el bloque se atraviesa siempre de izquierda a derecha en la ida y al revés en la vuelta
+    const entraAlBloque = lado === "b" ? "r" : "l", saleDelBloque = lado === "b" ? "l" : "r";
+    unir(A, pSal, bl, entraAlBloque);
+    unir(bl, saleDelBloque, B, pEnt);
+  }
+  return { nombre: limpiarNombre(S.nombre) + "-bloques", nodes, edges,
+           tema: { relleno: "#ffffff", borde: "#101418", texto: "#101418",
+                   flecha: "#101418", fondo: "#ffffff" }, hoja: null };
+}
+
+/* ---- dibujo del equivalente: un SVG suelto, para la vista previa y el PNG ---- */
+const DIRP = { l: { x: -1, y: 0 }, r: { x: 1, y: 0 }, t: { x: 0, y: -1 }, b: { x: 0, y: 1 } };
+function puntoPuerto(n, p) {
+  if (n.type === "node") return { x: n.x, y: n.y };     // la bifurcación es un punto
+  const d = DIRP[p] || DIRP.l;
+  return { x: n.x + d.x * n.w / 2, y: n.y + d.y * n.h / 2 };
+}
+function caminoOrto(p1, d1, p2, d2) {          // ruteo en ángulo recto, como en el editor
+  const s = 20;
+  const a = { x: p1.x + d1.x * s, y: p1.y + d1.y * s };
+  const b = { x: p2.x - d2.x * s, y: p2.y - d2.y * s };
+  const medio = [];
+  const h1 = d1.x !== 0, h2 = d2.x !== 0;
+  if (h1 && h2) { const mx = (a.x + b.x) / 2; medio.push({ x: mx, y: a.y }, { x: mx, y: b.y }); }
+  else if (h1 && !h2) medio.push({ x: b.x, y: a.y });
+  else if (!h1 && h2) medio.push({ x: a.x, y: b.y });
+  else { const my = (a.y + b.y) / 2; medio.push({ x: a.x, y: my }, { x: b.x, y: my }); }
+  return [p1, a].concat(medio, [b, p2])
+    .filter((p, i, l) => i === 0 || Math.abs(p.x - l[i - 1].x) > .5 || Math.abs(p.y - l[i - 1].y) > .5);
+}
+function svgDeBloques(d) {
+  const m = 34;
+  let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
+  for (const n of d.nodes) {
+    l = Math.min(l, n.x - n.w / 2 - m); r = Math.max(r, n.x + n.w / 2 + m);
+    t = Math.min(t, n.y - n.h / 2 - m); b = Math.max(b, n.y + n.h / 2 + m);
+  }
+  if (!d.nodes.length) { l = 0; t = 0; r = 200; b = 120; }
+  const W = r - l, H = b - t;
+  const s = document.createElementNS(NS, "svg");
+  s.setAttribute("width", W); s.setAttribute("height", H);
+  s.setAttribute("viewBox", l + " " + t + " " + W + " " + H);
+  const defs = document.createElementNS(NS, "defs");
+  defs.innerHTML = '<marker id="pta" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7"' +
+    ' markerHeight="7" orient="auto-start-reverse" markerUnits="strokeWidth">' +
+    '<path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="#101418"/></marker>';
+  s.appendChild(defs);
+  el("rect", { x: l, y: t, width: W, height: H, fill: "#ffffff" }, s);
+  const porId = new Map(d.nodes.map(n => [n.id, n]));
+  for (const e of d.edges) {
+    const A = porId.get(e.from.id), B = porId.get(e.to.id);
+    if (!A || !B) continue;
+    const pts = caminoOrto(puntoPuerto(A, e.from.port), DIRP[e.from.port] || DIRP.r,
+                           puntoPuerto(B, e.to.port), DIRP[e.to.port] || DIRP.l);
+    el("path", { d: "M " + pts.map(p => p.x + " " + p.y).join(" L "), fill: "none",
+      stroke: "#101418", "stroke-width": 1.6, "stroke-linejoin": "round",
+      "marker-end": "url(#pta)" }, s);
+  }
+  const texto = (x, y, cont, tam) => {
+    const e = el("text", { x, y, "font-family": "Arial,Helvetica,sans-serif", "font-size": tam,
+      fill: "#101418", "text-anchor": "middle", "dominant-baseline": "central" }, s);
+    e.textContent = cont; return e;
+  };
+  for (const n of d.nodes) {
+    if (n.type === "block") {
+      el("rect", { x: n.x - n.w / 2, y: n.y - n.h / 2, width: n.w, height: n.h,
+        fill: "#ffffff", stroke: "#101418", "stroke-width": 1.6 }, s);
+      texto(n.x, n.y, n.label, 15);
+    } else if (n.type === "sum") {
+      const rad = n.w / 2, k = rad * Math.SQRT1_2;
+      el("circle", { cx: n.x, cy: n.y, r: rad, fill: "#ffffff", stroke: "#101418", "stroke-width": 1.6 }, s);
+      el("path", { d: "M " + (n.x - k) + " " + (n.y - k) + " L " + (n.x + k) + " " + (n.y + k) +
+        " M " + (n.x + k) + " " + (n.y - k) + " L " + (n.x - k) + " " + (n.y + k),
+        stroke: "#101418", "stroke-width": 1.4, fill: "none" }, s);
+      for (const p in n.signs) {
+        if (!n.signs[p]) continue;
+        const dd = DIRP[p];
+        texto(n.x + dd.x * rad * 0.58, n.y + dd.y * rad * 0.58, n.signs[p], 13);
+      }
+    } else if (n.type === "node") {
+      el("circle", { cx: n.x, cy: n.y, r: 4.5, fill: "#101418" }, s);
+    } else {
+      texto(n.x, n.y, n.label, 14);
+    }
+  }
+  return { svg: s, W, H };
+}
+
 /* ======================= ventana de análisis ======================= */
 function mostrarMason() {
   const A = analizar();
@@ -758,7 +966,9 @@ function mostrarMason() {
   if (!A.entrada || !A.salida) {
     elSub.textContent = "Falta marcar los nodos de entrada y de salida.";
     body.innerHTML = `<div class="nada">Seleccioná un nodo y en el panel derecho elegí si es la
-      entrada o la salida del sistema. Mason necesita una de cada una.</div>` + htmlEcuaciones();
+      entrada o la salida del sistema. Mason necesita una de cada una.</div>` + htmlEcuaciones() +
+      seccionEquivalente();
+    pintarEquivalente();
     $("#ov-mason").classList.add("show");
     return;
   }
@@ -835,8 +1045,55 @@ function mostrarMason() {
       h += `<br><br>= ${redondear(vs.reduce((a, b) => a + b, 0) / dValor)}`;
     h += `</div>`;
   }
+  h += seccionEquivalente();
   body.innerHTML = h;
+  pintarEquivalente();
   $("#ov-mason").classList.add("show");
+}
+function seccionEquivalente() {
+  return `<h4>6 · Diagrama de bloques equivalente</h4>
+    <div class="previo" id="bq-previo"></div>
+    <div class="iconbar" style="margin-top:10px">
+      <button class="btn" id="bq-png">Descargar PNG</button>
+      <button class="btn" id="bq-json">Descargar JSON</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Cada nodo con varias ramas entrando es un sumador
+      —el signo de la transmitancia se lo queda el sumador— y cada rama con transmitancia
+      distinta de 1 es un bloque. El JSON se abre con <b>Diagramas de bloques</b> desde
+      Archivo → Abrir, así que de ahí lo seguís editando, lo acomodás y lo exportás.</div>`;
+}
+/* La vista previa y los dos botones de descarga del equivalente */
+function pintarEquivalente() {
+  const caja = $("#bq-previo");
+  if (!caja) return;
+  const datos = equivalenteEnBloques();
+  if (!datos.nodes.length) {
+    caja.innerHTML = `<div class="nada">Todavía no hay nada que convertir.</div>`;
+    return;
+  }
+  const { svg: s } = svgDeBloques(datos);
+  s.setAttribute("width", "100%"); s.removeAttribute("height");
+  caja.innerHTML = ""; caja.appendChild(s);
+  $("#bq-json").onclick = () => {
+    download(limpiarNombre(datos.nombre) + ".json",
+      new Blob([JSON.stringify(datos, null, 1)], { type: "application/json" }));
+    toast("JSON descargado: abrilo en Diagramas de bloques");
+  };
+  $("#bq-png").onclick = () => {
+    const { svg: s2, W, H } = svgDeBloques(datos);
+    const img = new Image();
+    img.onload = () => {
+      const esc = 3, cv = document.createElement("canvas");
+      cv.width = W * esc; cv.height = H * esc;
+      const ctx = cv.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      cv.toBlob(bl => { download(limpiarNombre(datos.nombre) + ".png", bl); toast("PNG descargado (3×)"); });
+    };
+    img.onerror = () => toast("No se pudo generar el PNG");
+    img.src = "data:image/svg+xml;base64," +
+      btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s2))));
+  };
 }
 function htmlEcuaciones() {
   const eqs = ecuaciones();
