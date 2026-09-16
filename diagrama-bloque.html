@@ -55,6 +55,11 @@ button,select,input[type=text],input[type=number]{font-family:var(--ui);font-siz
 .btn[disabled]{opacity:.35;pointer-events:none}
 .chip{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:0 6px}
 .marca-navbar{height:26px;width:auto;display:block;flex:none}
+/* editor que aparece sobre la hoja al hacer doble clic */
+.editor-hoja{position:absolute;z-index:8;transform:translate(-50%,-50%);
+  border:1.5px solid var(--accent);border-radius:6px;padding:5px 7px;
+  font-family:var(--draw);font-size:13px;text-align:center;background:var(--paper);
+  box-shadow:0 8px 24px rgba(18,24,31,.2);outline:none}
 /* En pantallas angostas el panel flota sobre la hoja en vez de comerle el ancho */
 @media (max-width:720px){
   main{position:relative}
@@ -262,6 +267,8 @@ svg#canvas{
     <span class="glab">Modo</span>
     <button class="btn on" id="m-select" title="Seleccionar / mover (V)">
       <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg>Selección</button>
+    <button class="btn" id="m-multi" title="Selección múltiple (X): cada clic suma o saca, sin tener que usar Shift">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="10" rx="1.5"/><rect x="11" y="11" width="10" height="10" rx="1.5"/></svg>Selección múltiple</button>
     <button class="btn" id="m-connect" title="Conectar (C)">
       <svg viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M13 8l4 4-4 4"/><circle cx="20" cy="12" r="1.5"/></svg>Conectar</button>
   </div>
@@ -482,7 +489,10 @@ function cargarDoc(d, desdeArchivo) {
   S.tema = Object.assign({}, TEMA_DEF, d.tema || {});
   S.hoja = d.hoja || null;
   S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
-  uidc = S.nodes.length + S.edges.length + 100;
+  uidc = proximoUid(S.nodes, S.edges);
+  const vistos = new Set();
+  const repetidos = sanearIds(S.nodes, "n", vistos) + sanearIds(S.edges, "e", vistos);
+  if (repetidos) setTimeout(() => toast("Se renumeraron " + repetidos + " ids repetidos"), 60);
   S.sel = []; S.selEdges = [];
 }
 /* Los SVG exportados llevan el diagrama adentro, en <metadata>, así que se
@@ -608,8 +618,33 @@ function renderHoja() {
     "font-size": Math.max(11, Math.round(11 / S.zoom)) }, g);
   t.textContent = `${(HOJAS[H.preset] || {}).nombre || "Área"} · ${H.w} × ${H.h}`;
 }
+/* ---------- identificadores ----------
+   Un id repetido es veneno: getNode() devuelve siempre el primero, así que el
+   elemento nuevo termina moviendo, duplicando o borrando al viejo. Por eso el
+   contador salta los que ya estén ocupados, y al abrir un archivo arranca del
+   número más alto en uso (contar los elementos no alcanza: al borrar y duplicar
+   los números se saltean y quedan ids muy por encima de la cantidad). */
 let uidc = 1;
-const uid = (p) => p + (uidc++);
+const idEnUso = (id) => S.nodes.some(n => n.id === id) || S.edges.some(e => e.id === id);
+const uid = (p) => { let id; do { id = p + (uidc++); } while (idEnUso(id)); return id; };
+function proximoUid(...listas) {
+  let max = 0;
+  for (const lista of listas) for (const o of (lista || [])) {
+    const m = /(\d+)$/.exec(String((o && o.id) || ""));
+    if (m) max = Math.max(max, +m[1]);
+  }
+  return max + 1;
+}
+/* Un archivo guardado mientras el contador estaba mal puede traer ids repetidos.
+   El primero se queda con el suyo, que es a quien ya apuntaban las flechas. */
+function sanearIds(lista, prefijo, vistos) {
+  let arreglados = 0;
+  for (const o of lista) {
+    if (!o.id || vistos.has(o.id)) { o.id = uid(prefijo); arreglados++; }
+    vistos.add(o.id);
+  }
+  return arreglados;
+}
 
 const DEF = {
   block: { w: 72, h: 42, label: "G", font: 15 },
@@ -1600,6 +1635,63 @@ function redo() {
   const s = redoStack.pop(); restore(s); lastSnap = s; render();
 }
 
+/* ======================= editar con doble clic =======================
+   Un input de verdad apoyado sobre el elemento: es el mismo campo "Contenido"
+   del panel, pero sin tener que ir hasta el panel. */
+let editorAbierto = null;
+function cerrarEditor(guardar) {
+  if (!editorAbierto) return;
+  const { input, aplicar } = editorAbierto;
+  editorAbierto = null;                        // primero, para que el blur no vuelva a entrar
+  if (guardar) aplicar(input.value);
+  input.remove();
+  if (guardar) commit();
+  render();
+}
+function editarEnLaHoja(xMundo, yMundo, valor, ancho, aplicar) {
+  cerrarEditor(false);
+  const input = document.createElement("input");
+  input.type = "text"; input.className = "editor-hoja"; input.value = valor == null ? "" : valor;
+  input.style.left = (S.pan.x + xMundo * S.zoom) + "px";
+  input.style.top = (S.pan.y + yMundo * S.zoom) + "px";
+  input.style.width = Math.max(120, ancho * S.zoom + 44) + "px";
+  $("#stage").appendChild(input);
+  editorAbierto = { input, aplicar };
+  input.focus(); input.select();
+  input.addEventListener("keydown", ev => {
+    ev.stopPropagation();
+    if (ev.key === "Enter") { ev.preventDefault(); cerrarEditor(true); }
+    else if (ev.key === "Escape") { ev.preventDefault(); cerrarEditor(false); }
+  });
+  input.addEventListener("blur", () => cerrarEditor(true));
+}
+function puntoEtiqueta(e) {                    // el medio del tramo más largo, como al dibujarla
+  const segs = segsOf(e.pts);
+  let best = segs[0], largo = -1;
+  for (const s of segs) {
+    const L = Math.hypot(s[1].x - s[0].x, s[1].y - s[0].y);
+    if (L > largo) { largo = L; best = s; }
+  }
+  return { x: (best[0].x + best[1].x) / 2, y: (best[0].y + best[1].y) / 2 };
+}
+svg.addEventListener("dblclick", ev => {
+  const nid = hitNode(ev.target);
+  if (nid) {
+    const n = getNode(nid);
+    if (!n || n.type === "node") return;        // la bifurcación no tiene contenido
+    S.sel = [nid]; S.selEdges = []; render();
+    editarEnLaHoja(n.x, n.y, n.label, n.w, v => n.label = v);
+    return;
+  }
+  const eg = ev.target.closest ? ev.target.closest("[data-eid]") : null;
+  const e = eg && getEdge(eg.getAttribute("data-eid"));
+  if (e && e.pts && e.pts.length > 1) {
+    S.selEdges = [e.id]; S.sel = []; render();
+    const p = puntoEtiqueta(e);
+    editarEnLaHoja(p.x, p.y, e.label, 60, v => e.label = v);
+  }
+});
+
 /* ======================= interacción ======================= */
 let drag = null, spaceDown = false;
 function toWorld(ev) {
@@ -1668,8 +1760,8 @@ svg.addEventListener("pointerdown", ev => {
     drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, px: S.pan.x, py: S.pan.y };
     svg.classList.add("panning"); return;
   }
-  // un dedo en el fondo mueve la hoja (con el mouse eso es la banda de selección)
-  if (ev.pointerType === "touch" && esFondo(t) && !pendingAdd) {
+  // un dedo en el fondo mueve la hoja, salvo en selección múltiple, donde encierra
+  if (ev.pointerType === "touch" && esFondo(t) && !pendingAdd && S.mode !== "multi") {
     S.sel = []; S.selEdges = [];
     drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, px: S.pan.x, py: S.pan.y };
     render(); return;
@@ -1688,7 +1780,7 @@ svg.addEventListener("pointerdown", ev => {
     if (pendingAdd === "node") {               // insertar bifurcación en el medio de esta flecha
       splitEdge(getEdge(id)); setPending(null); commit(); render(); return;
     }
-    if (ev.shiftKey) { S.selEdges = S.selEdges.includes(id) ? S.selEdges.filter(x => x !== id) : S.selEdges.concat(id); }
+    if (sumandoALaSeleccion(ev)) { S.selEdges = S.selEdges.includes(id) ? S.selEdges.filter(x => x !== id) : S.selEdges.concat(id); }
     else { S.selEdges = [id]; S.sel = []; }
     render(); return;
   }
@@ -1701,14 +1793,14 @@ svg.addEventListener("pointerdown", ev => {
       drag = { kind: "connect", fromId: nid, fromPort: port, start: portPoint(n, port), cur: w };
       render(); return;
     }
-    if (ev.shiftKey) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
+    if (sumandoALaSeleccion(ev)) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
     else if (!S.sel.includes(nid)) { S.sel = [nid]; S.selEdges = []; }
     drag = { kind: "move", w0: w, orig: S.sel.map(id => { const n = getNode(id); return { id, x: n.x, y: n.y }; }), moved: false };
     render(); return;
   }
   // vacío -> banda de selección
-  if (!ev.shiftKey) { S.sel = []; S.selEdges = []; }
-  drag = { kind: "band", band: { x1: w.x, y1: w.y, x2: w.x, y2: w.y }, add: ev.shiftKey };
+  if (!sumandoALaSeleccion(ev)) { S.sel = []; S.selEdges = []; }
+  drag = { kind: "band", band: { x1: w.x, y1: w.y, x2: w.x, y2: w.y }, add: sumandoALaSeleccion(ev) };
   render();
 });
 function nearestPort(n, w, fromNode) {
@@ -2032,15 +2124,20 @@ $("#io-ok").onclick = () => abrirTexto($("#io-text").value);
 
 /* ======================= barra superior ======================= */
 $("#m-select").onclick = () => setMode("select");
+$("#m-multi").onclick = () => setMode(S.mode === "multi" ? "select" : "multi");
 $("#m-connect").onclick = () => setMode("connect");
 function setMode(m) {
   S.mode = m;
   $("#m-select").classList.toggle("on", m === "select");
+  $("#m-multi").classList.toggle("on", m === "multi");
   $("#m-connect").classList.toggle("on", m === "connect");
   svg.classList.toggle("mode-connect", m === "connect");
-  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un elemento a otro para crear la flecha" : "";
+  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un elemento a otro para crear la flecha"
+    : m === "multi" ? "Cada clic suma o saca de la selección · arrastrá en el fondo para encerrar varios" : "";
   render();
 }
+/* En selección múltiple cada clic suma o saca, igual que si tuvieras Shift apretado */
+const sumandoALaSeleccion = (ev) => ev.shiftKey || S.mode === "multi";
 $("#b-undo").onclick = undo;
 $("#b-redo").onclick = redo;
 $("#b-del").onclick = () => { deleteSel(); commit(); render(); };
@@ -2105,6 +2202,7 @@ window.addEventListener("keydown", ev => {
   if (k === "delete" || k === "backspace") { ev.preventDefault(); deleteSel(); commit(); render(); return; }
   if (k === "escape") { setPending(null); S.sel = []; S.selEdges = []; render(); return; }
   if (k === "v") return setMode("select");
+  if (k === "x") return setMode("multi");
   if (k === "c") return setMode("connect");
   if (k === "b") return setPending("block");
   if (k === "s") return setPending("sum");

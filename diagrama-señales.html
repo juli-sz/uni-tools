@@ -54,6 +54,11 @@ button,select,input[type=text],input[type=number]{font-family:var(--ui);font-siz
 .btn[disabled]{opacity:.35;pointer-events:none}
 .chip{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:0 6px}
 .marca-navbar{height:26px;width:auto;display:block;flex:none}
+/* editor que aparece sobre la hoja al hacer doble clic */
+.editor-hoja{position:absolute;z-index:8;transform:translate(-50%,-50%);
+  border:1.5px solid var(--accent);border-radius:6px;padding:5px 7px;
+  font-family:var(--draw);font-size:13px;text-align:center;background:var(--paper);
+  box-shadow:0 8px 24px rgba(18,24,31,.2);outline:none}
 /* En pantallas angostas el panel flota sobre la hoja en vez de comerle el ancho */
 @media (max-width:720px){
   main{position:relative}
@@ -171,6 +176,7 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
   <div class="group collapsed">
     <span class="glab">Modo</span>
     <button class="btn on" id="m-select" title="Seleccionar y mover (V)">Selección</button>
+    <button class="btn" id="m-multi" title="Selección múltiple (X): cada clic suma o saca, sin tener que usar Shift">Selección múltiple</button>
     <button class="btn" id="m-connect" title="Dibujar ramas (C)">Conectar</button>
   </div>
 
@@ -337,8 +343,32 @@ let S = {
   nombre: "flujo-de-senales"
 };
 const NOMBRE_DEF = "flujo-de-senales";
+/* ---------- identificadores ----------
+   Un id repetido es veneno: getNodo() devuelve siempre el primero, así que el
+   nodo nuevo termina moviendo o borrando al viejo. Por eso el contador salta los
+   que ya estén ocupados, y al abrir un archivo arranca del número más alto en
+   uso (contar los elementos no alcanza: al borrar los números se saltean). */
 let uidc = 1;
-const uid = (p) => p + (uidc++);
+const idEnUso = (id) => S.nodos.some(n => n.id === id) || S.ramas.some(r => r.id === id);
+const uid = (p) => { let id; do { id = p + (uidc++); } while (idEnUso(id)); return id; };
+function proximoUid(...listas) {
+  let max = 0;
+  for (const lista of listas) for (const o of (lista || [])) {
+    const m = /(\d+)$/.exec(String((o && o.id) || ""));
+    if (m) max = Math.max(max, +m[1]);
+  }
+  return max + 1;
+}
+/* Un archivo guardado mientras el contador estaba mal puede traer ids repetidos.
+   El primero se queda con el suyo, que es a quien ya apuntaban las ramas. */
+function sanearIds(lista, prefijo, vistos) {
+  let arreglados = 0;
+  for (const o of lista) {
+    if (!o.id || vistos.has(o.id)) { o.id = uid(prefijo); arreglados++; }
+    vistos.add(o.id);
+  }
+  return arreglados;
+}
 const getNodo = (id) => S.nodos.find(n => n.id === id);
 const getRama = (id) => S.ramas.find(r => r.id === id);
 const R_NODO = 6;                       // radio del puntito del nodo
@@ -917,14 +947,66 @@ function setModo(m) {
   modo = m;
   svg.classList.toggle("mode-connect", m === "connect");
   $("#m-select").classList.toggle("on", m === "select");
+  $("#m-multi").classList.toggle("on", m === "multi");
   $("#m-connect").classList.toggle("on", m === "connect");
-  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un nodo a otro para dibujar la rama" : "";
+  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un nodo a otro para dibujar la rama"
+    : m === "multi" ? "Cada clic suma o saca de la selección · arrastrá en el fondo para encerrar varios" : "";
 }
+/* En selección múltiple cada clic suma o saca, igual que si tuvieras Shift apretado */
+const sumandoALaSeleccion = (ev) => ev.shiftKey || modo === "multi";
 function setPendiente(t) {
   pendiente = t;
   document.querySelectorAll(".ptool").forEach(b => b.classList.toggle("on", b.dataset.add === t));
   $("#st-hint").textContent = t ? "Hacé clic en la hoja para poner el nodo · Esc cancela" : "";
 }
+/* ======================= editar con doble clic =======================
+   Un input de verdad apoyado sobre el elemento: el nombre del nodo o la
+   transmitancia de la rama, sin tener que ir hasta el panel. */
+let editorAbierto = null;
+function cerrarEditor(guardar) {
+  if (!editorAbierto) return;
+  const { input, aplicar } = editorAbierto;
+  editorAbierto = null;                        // primero, para que el blur no vuelva a entrar
+  if (guardar) aplicar(input.value);
+  input.remove();
+  if (guardar) commit();
+  render();
+}
+function editarEnLaHoja(xMundo, yMundo, valor, aplicar) {
+  cerrarEditor(false);
+  const input = document.createElement("input");
+  input.type = "text"; input.className = "editor-hoja"; input.value = valor == null ? "" : valor;
+  input.style.left = (S.pan.x + xMundo * S.zoom) + "px";
+  input.style.top = (S.pan.y + yMundo * S.zoom) + "px";
+  input.style.width = Math.max(110, 90 * S.zoom) + "px";
+  $("#stage").appendChild(input);
+  editorAbierto = { input, aplicar };
+  input.focus(); input.select();
+  input.addEventListener("keydown", ev => {
+    ev.stopPropagation();
+    if (ev.key === "Enter") { ev.preventDefault(); cerrarEditor(true); }
+    else if (ev.key === "Escape") { ev.preventDefault(); cerrarEditor(false); }
+  });
+  input.addEventListener("blur", () => cerrarEditor(true));
+}
+svg.addEventListener("dblclick", ev => {
+  const nid = idDeNodo(ev.target);
+  if (nid) {
+    const n = getNodo(nid);
+    S.sel = [nid]; S.selR = []; render();
+    editarEnLaHoja(n.x, n.y - 20, n.nombre, v => n.nombre = v);
+    return;
+  }
+  const w = toWorld(ev);
+  const rid = idDeRama(ev.target) || (ramaCerca(w) || {}).id;
+  const r = rid && getRama(rid);
+  if (r) {
+    S.selR = [rid]; S.sel = []; render();
+    const c = curvaDe(r);
+    editarEnLaHoja(c.lx, c.ly, r.g, v => r.g = v);
+  }
+});
+
 /* ======================= gestos táctiles =======================
    Un dedo en el fondo mueve la hoja, un dedo sobre un nodo o una rama lo
    selecciona igual que con el mouse, y dos dedos hacen zoom. */
@@ -984,7 +1066,7 @@ svg.addEventListener("pointerdown", ev => {
   svg.setPointerCapture(ev.pointerId);
 
   // un dedo en el fondo mueve la hoja (con el mouse eso es la banda de selección)
-  if (ev.pointerType === "touch" && esFondo(t) && pendiente !== "nodo" && !ramaCerca(w)) {
+  if (ev.pointerType === "touch" && esFondo(t) && pendiente !== "nodo" && !ramaCerca(w) && modo !== "multi") {
     S.sel = []; S.selR = [];
     drag = { kind: "pan", x0: ev.clientX, y0: ev.clientY, p0: Object.assign({}, S.pan) };
     render(); return;
@@ -1000,18 +1082,18 @@ svg.addEventListener("pointerdown", ev => {
       drag = { kind: "connect", fromId: nid, cur: w };
       render(); return;
     }
-    if (ev.shiftKey) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
+    if (sumandoALaSeleccion(ev)) S.sel = S.sel.includes(nid) ? S.sel.filter(x => x !== nid) : S.sel.concat(nid);
     else if (!S.sel.includes(nid)) { S.sel = [nid]; S.selR = []; }
     drag = { kind: "move", w0: w, orig: S.sel.map(id => { const n = getNodo(id); return { id, x: n.x, y: n.y }; }) };
     render(); return;
   }
   const rid = idDeRama(t) || (ramaCerca(w) || {}).id;
   if (rid) {
-    if (ev.shiftKey) S.selR = S.selR.includes(rid) ? S.selR.filter(x => x !== rid) : S.selR.concat(rid);
+    if (sumandoALaSeleccion(ev)) S.selR = S.selR.includes(rid) ? S.selR.filter(x => x !== rid) : S.selR.concat(rid);
     else { S.selR = [rid]; S.sel = []; }
     render(); return;
   }
-  if (!ev.shiftKey) { S.sel = []; S.selR = []; }
+  if (!sumandoALaSeleccion(ev)) { S.sel = []; S.selR = []; }
   drag = { kind: "band", band: { x1: w.x, y1: w.y, x2: w.x, y2: w.y } };
   render();
 });
@@ -1087,6 +1169,7 @@ window.addEventListener("keydown", ev => {
     document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show")); render(); return; }
   if (k === "n") return setPendiente("nodo");
   if (k === "v") return setModo("select");
+  if (k === "x") return setModo("multi");
   if (k === "c") return setModo("connect");
   if (k === "a") return mostrarMason();
   if (k === "f") return fit();
@@ -1158,7 +1241,10 @@ function download(name, blob) {
 function cargarDoc(d, desdeArchivo) {
   S.nodos = d.nodos || []; S.ramas = d.ramas || [];
   S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
-  uidc = S.nodos.length + S.ramas.length + 100;
+  uidc = proximoUid(S.nodos, S.ramas);
+  const vistos = new Set();
+  const repetidos = sanearIds(S.nodos, "n", vistos) + sanearIds(S.ramas, "r", vistos);
+  if (repetidos) setTimeout(() => toast("Se renumeraron " + repetidos + " ids repetidos"), 60);
   S.sel = []; S.selR = [];
 }
 function datosDeSVG(txt) {
@@ -1187,6 +1273,7 @@ function abrirTexto(txt, nombreDelArchivo) {
 
 /* ======================= barra ======================= */
 $("#m-select").onclick = () => setModo("select");
+$("#m-multi").onclick = () => setModo(modo === "multi" ? "select" : "multi");
 $("#m-connect").onclick = () => setModo("connect");
 $("#b-undo").onclick = undo;
 $("#b-redo").onclick = redo;
