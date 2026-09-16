@@ -48,6 +48,17 @@ button,select,input{font-family:var(--ui);font-size:12px;color:var(--ink)}
 .btn[disabled]{opacity:.35;pointer-events:none}
 .chip{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:0 6px}
 .marca-navbar{height:26px;width:auto;display:block;flex:none}
+/* editor que aparece sobre la hoja al hacer doble clic */
+.editor-hoja{position:absolute;z-index:8;transform:translate(-50%,-50%);
+  border:1.5px solid var(--accent);border-radius:6px;padding:5px 7px;
+  font-family:var(--draw);font-size:13px;text-align:center;background:var(--paper);
+  box-shadow:0 8px 24px rgba(18,24,31,.2);outline:none}
+/* En pantallas angostas el panel flota sobre la hoja en vez de comerle el ancho */
+@media (max-width:720px){
+  main{position:relative}
+  #inspector{position:absolute;top:0;right:0;bottom:0;z-index:6;width:min(300px,86vw);
+    box-shadow:-8px 0 24px rgba(18,24,31,.14)}
+}
 main{flex:1;display:flex;min-height:0}
 #stage{flex:1;position:relative;background:var(--paper);overflow:hidden}
 svg#canvas{width:100%;height:100%;display:block;touch-action:none}
@@ -379,7 +390,8 @@ svg#canvas{
     <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar</td></tr>
     <tr><td>Flechas</td><td>Mover un paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
     <tr><td><kbd>R</kbd></td><td>Gira la compuerta seleccionada 90° (con <kbd>Shift</kbd>, al revés). Los cables siguen atados a la misma pata y se rehacen solos</td></tr>
-    <tr><td>Dos dedos</td><td>Mueve el lienzo para donde arrastres; el pellizco hace zoom</td></tr>
+    <tr><td>Pantalla táctil</td><td>Un dedo en el fondo mueve la hoja; un dedo sobre un elemento lo
+      selecciona y lo arrastra; dos dedos hacen zoom</td></tr>
     <tr><td>Rueda / Espacio</td><td>Mueve el lienzo · <kbd>Ctrl</kbd>+rueda hace zoom · <kbd>Shift</kbd>+rueda a lo ancho</td></tr>
   </table>
   <div style="margin-top:16px;text-align:right"><button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button></div>
@@ -561,7 +573,33 @@ const bubR = (n) => T[n.type].bubble ? 5 : 0;
 const outX = (n) => bodyW(n) / 2 + bubR(n) * 2 + STUB;
 const inX  = (n) => -bodyW(n) / 2 - STUB;
 
-let uidc = 1; const uid = (p) => p + (uidc++);
+/* ---------- identificadores ----------
+   Un id repetido es veneno: getNode() devuelve siempre el primero, así que la
+   compuerta nueva termina moviendo, duplicando o borrando a la vieja. Por eso el
+   contador salta los que ya estén ocupados, y al abrir un archivo arranca del
+   número más alto en uso (contar los elementos no alcanza: al borrar y duplicar
+   los números se saltean y quedan ids muy por encima de la cantidad). */
+let uidc = 1;
+const idEnUso = (id) => S.nodes.some(n => n.id === id) || S.wires.some(w => w.id === id);
+const uid = (p) => { let id; do { id = p + (uidc++); } while (idEnUso(id)); return id; };
+function proximoUid(...listas) {
+  let max = 0;
+  for (const lista of listas) for (const o of (lista || [])) {
+    const m = /(\d+)$/.exec(String((o && o.id) || ""));
+    if (m) max = Math.max(max, +m[1]);
+  }
+  return max + 1;
+}
+/* Un archivo guardado mientras el contador estaba mal puede traer ids repetidos.
+   El primero se queda con el suyo, que es a quien ya apuntaban los cables. */
+function sanearIds(lista, prefijo, vistos) {
+  let arreglados = 0;
+  for (const o of lista) {
+    if (!o.id || vistos.has(o.id)) { o.id = uid(prefijo); arreglados++; }
+    vistos.add(o.id);
+  }
+  return arreglados;
+}
 let S = { nodes: [], wires: [], sel: [], selW: [], snap: true, grid: 20,
   showGrid: true, zoom: 1, pan: { x: 80, y: 60 }, tema: null,
   hoja: null,                         // área de impresión: null = se exporta lo que haya
@@ -584,7 +622,10 @@ function cargarDoc(d, desdeArchivo) {
   S.hoja = d.hoja || null;
   S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
   S.nodes.forEach(n => { if (n.type === "ff") n.clkArranque = false; });
-  uidc = S.nodes.length + S.wires.length + 100;
+  uidc = proximoUid(S.nodes, S.wires);
+  const vistos = new Set();
+  const repetidos = sanearIds(S.nodes, "n", vistos) + sanearIds(S.wires, "w", vistos);
+  if (repetidos) setTimeout(() => toast("Se renumeraron " + repetidos + " ids repetidos"), 60);
   S.sel = []; S.selW = []; VAL = new Map();
 }
 /* Los SVG exportados llevan el circuito adentro, en <metadata>, así que se
@@ -1820,12 +1861,106 @@ function pinCercano(n, w) {
   }
   return best;
 }
+/* ======================= editar con doble clic =======================
+   Un input de verdad apoyado sobre el elemento: es el mismo campo "Nombre" del
+   panel, pero sin tener que ir hasta el panel. */
+let editorAbierto = null;
+function cerrarEditor(guardar) {
+  if (!editorAbierto) return;
+  const { input, aplicar } = editorAbierto;
+  editorAbierto = null;                        // primero, para que el blur no vuelva a entrar
+  if (guardar) aplicar(input.value);
+  input.remove();
+  if (guardar) commit();
+  render();
+}
+function editarEnLaHoja(xMundo, yMundo, valor, ancho, aplicar) {
+  cerrarEditor(false);
+  const input = document.createElement("input");
+  input.type = "text"; input.className = "editor-hoja"; input.value = valor == null ? "" : valor;
+  input.style.left = (S.pan.x + xMundo * S.zoom) + "px";
+  input.style.top = (S.pan.y + yMundo * S.zoom) + "px";
+  input.style.width = Math.max(110, ancho * S.zoom + 40) + "px";
+  $("#stage").appendChild(input);
+  editorAbierto = { input, aplicar };
+  input.focus(); input.select();
+  input.addEventListener("keydown", ev => {
+    ev.stopPropagation();
+    if (ev.key === "Enter") { ev.preventDefault(); cerrarEditor(true); }
+    else if (ev.key === "Escape") { ev.preventDefault(); cerrarEditor(false); }
+  });
+  input.addEventListener("blur", () => cerrarEditor(true));
+}
+svg.addEventListener("dblclick", ev => {
+  const g = ev.target.closest ? ev.target.closest("[data-id]") : null;
+  const n = g && getNode(g.getAttribute("data-id"));
+  if (!n) return;
+  S.sel = [n.id]; S.selW = []; render();
+  const arriba = n.type === "in" || n.type === "out" || n.type === "clk";
+  editarEnLaHoja(n.x, n.y - (arriba ? bodyH(n) / 2 + 11 : 0), n.label, bodyW(n), v => n.label = v);
+});
+
+/* ======================= gestos táctiles =======================
+   Un dedo en el fondo mueve la hoja, un dedo sobre una compuerta o un cable lo
+   selecciona igual que con el mouse, y dos dedos hacen zoom. */
+const dedos = new Map();                     // pointerId -> posición en pantalla
+let pellizco = null, gestoZoom = false;
+const esFondo = (t) => !(t && t.closest && t.closest("[data-id],[data-wid],[data-pid]"));
+function centroDedos() {
+  const p = Array.from(dedos.values());
+  return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2,
+           d: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) };
+}
+function cancelarDrag() {                    // al aparecer el segundo dedo se deshace lo empezado
+  if (drag && drag.kind === "move" && drag.orig)
+    drag.orig.forEach(o => { const n = getNode(o.id); if (n) { n.x = o.x; n.y = o.y; } });
+  drag = null;
+  svg.classList.remove("panning");
+}
+function arrancarPellizco() {
+  cancelarDrag();
+  gestoZoom = true;
+  const c = centroDedos();
+  pellizco = { d0: c.d || 1, z0: S.zoom, cx: c.x, cy: c.y, px: S.pan.x, py: S.pan.y };
+  render();
+}
+/* El punto de la hoja que estaba abajo del centro de los dedos se queda ahí */
+function moverPellizco() {
+  if (!pellizco || dedos.size < 2) return;
+  const c = centroDedos(), r = svg.getBoundingClientRect();
+  const z = Math.min(4, Math.max(.2, pellizco.z0 * (c.d / pellizco.d0)));
+  const mx0 = pellizco.cx - r.left, my0 = pellizco.cy - r.top;
+  S.zoom = z;
+  S.pan.x = (c.x - r.left) - (mx0 - pellizco.px) * (z / pellizco.z0);
+  S.pan.y = (c.y - r.top) - (my0 - pellizco.py) * (z / pellizco.z0);
+  render();
+}
+function soltarDedo(ev) {
+  if (ev.pointerType !== "touch") return false;
+  dedos.delete(ev.pointerId);
+  if (dedos.size < 2) pellizco = null;
+  if (!dedos.size) { const hubo = gestoZoom; gestoZoom = false; if (hubo) { drag = null; return true; } }
+  return gestoZoom;                          // mientras queden dedos del pellizco, no se arrastra
+}
+svg.addEventListener("pointercancel", ev => { soltarDedo(ev); drag = null; render(); });
+
 svg.addEventListener("pointerdown", ev => {
   svg.setPointerCapture(ev.pointerId);
   const w = toWorld(ev), t = ev.target;
+  if (ev.pointerType === "touch") {
+    dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (dedos.size === 2) return arrancarPellizco();
+    if (dedos.size > 2) return;
+  }
   if (ev.button === 1 || spaceDown) {
     drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, px: S.pan.x, py: S.pan.y };
     svg.classList.add("panning"); return;
+  }
+  // un dedo en el fondo mueve la hoja (con el mouse eso es la banda de selección)
+  if (ev.pointerType === "touch" && esFondo(t) && !pendiente) {
+    S.sel = []; S.selW = [];
+    drag = { kind: "pan", sx: ev.clientX, sy: ev.clientY, px: S.pan.x, py: S.pan.y };
+    render(); return;
   }
   if (t.getAttribute && t.getAttribute("data-pid")) {
     const id = t.getAttribute("data-pid"), pin = t.getAttribute("data-pin");
@@ -1852,6 +1987,11 @@ svg.addEventListener("pointerdown", ev => {
   render();
 });
 svg.addEventListener("pointermove", ev => {
+  if (ev.pointerType === "touch") {
+    if (dedos.has(ev.pointerId)) dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (pellizco) return moverPellizco();
+    if (gestoZoom) return;
+  }
   const w = toWorld(ev);
   if (!drag) {
     const nid = nodoCerca(w);
@@ -1869,6 +2009,7 @@ svg.addEventListener("pointermove", ev => {
   if (drag.kind === "band") { drag.band.x2 = w.x; drag.band.y2 = w.y; render(); return; }
 });
 svg.addEventListener("pointerup", ev => {
+  if (soltarDedo(ev)) { render(); return; }
   const w = toWorld(ev);
   if (!drag) return;
   if (drag.kind === "connect") {
@@ -2410,6 +2551,10 @@ if (togglePanelBtn && inspectorPanel) {
     // Re-render luego de la transición CSS (0.2s) para asimilar el nuevo ancho
     setTimeout(render, 210);
   });
+  if (window.innerWidth <= 720) {            // en el celular la hoja va primero
+    inspectorPanel.classList.add('collapsed');
+    togglePanelBtn.classList.remove('on');
+  }
 }
 
 /* ======================= arranque ======================= */
