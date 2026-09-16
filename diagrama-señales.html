@@ -379,18 +379,27 @@ function limpiarNombre(s) {
 }
 const nombreArchivo = (ext) => limpiarNombre(S.nombre) + "." + ext;
 
+/* Los nodos se llaman A, B, D… Quedan afuera la G y la H, que son las funciones
+   de transferencia, y la R y la C, que son la entrada y la salida. */
+const LETRAS = "ABDEFIJKLMNOPQSTUVWXYZ".split("");
 function proximoNombre() {
   const usados = new Set(S.nodos.map(n => n.nombre));
-  for (let i = 1; i < 200; i++) if (!usados.has("x" + i)) return "x" + i;
-  return "x";
+  for (const l of LETRAS) if (!usados.has(l)) return l;
+  for (let v = 2; v < 50; v++)                 // agotadas las letras: A2, B2, …
+    for (const l of LETRAS) if (!usados.has(l + v)) return l + v;
+  return "N";
 }
 function nuevoNodo(x, y, extra) {
   return Object.assign({ id: uid("n"), nombre: proximoNombre(), x, y, tipo: "normal" }, extra || {});
 }
 function nuevaRama(de, a, extra) {
-  // La perpendicular ya se da vuelta con el sentido de la rama, así que con una
-  // curvatura negativa las de ida arquean para arriba y las de vuelta para abajo.
-  return Object.assign({ id: uid("r"), de, a, g: "1", curva: de === a ? 46 : -46 }, extra || {});
+  // La curvatura la acomoda acomodarRamas() en cada dibujado; 0 es línea recta.
+  return Object.assign({ id: uid("r"), de, a, g: "1", curva: de === a ? 46 : 0 }, extra || {});
+}
+/* El nodo del que sale la rama nueva: el que tengas elegido, o el último puesto */
+function nodoDeSalida() {
+  if (S.sel.length === 1) return getNodo(S.sel[0]);
+  return S.nodos.length ? S.nodos[S.nodos.length - 1] : null;
 }
 
 /* ======================= geometría ======================= */
@@ -437,9 +446,65 @@ function curvaDe(r) {
   const tx = 2 * (1 - t) * (ctrl.x - a.x) + 2 * t * (b.x - ctrl.x);
   const ty = 2 * (1 - t) * (ctrl.y - a.y) + 2 * t * (b.y - ctrl.y);
   const ang = Math.atan2(ty, tx) * 180 / Math.PI;
-  const signo = r.curva >= 0 ? 1 : -1;
+  const signo = r.curva > 0 ? 1 : -1;          // en la recta la etiqueta va del lado de arriba
   return { d, cx: px, cy: py, ang, px, py,
            lx: px + nx * signo * 15, ly: py + ny * signo * 15 };
+}
+/* ======================= acomodar las ramas =======================
+   Una rama va derecho si une dos nodos sin nada en el medio y es la única entre
+   ese par. Las demás —las que se saltean nodos, las que vuelven para atrás y las
+   paralelas— salen por afuera, en arcos que se van separando para no encimarse. */
+const ARCO_BASE = 46, ARCO_PASO = 34;
+function distanciaASegmento(p, a, b) {
+  const vx = b.x - a.x, vy = b.y - a.y, L2 = vx * vx + vy * vy;
+  if (!L2) return { d: Math.hypot(p.x - a.x, p.y - a.y), t: 0 };
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / L2));
+  return { d: Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy)), t };
+}
+function tapaUnNodo(A, B) {                    // ¿hay otro nodo apoyado en el medio?
+  for (const n of S.nodos) {
+    if (n.id === A.id || n.id === B.id) continue;
+    const { d, t } = distanciaASegmento(n, A, B);
+    if (d < R_NODO + 10 && t > 0.02 && t < 0.98) return true;
+  }
+  return false;
+}
+const ladoDe = (A, B, esLazo) => esLazo ? "lazo" : (B.x >= A.x ? "ida" : "vuelta");
+function tramoDe(r) {                          // franja que ocupa un arco, para repartirlos
+  const A = getNodo(r.de), B = getNodo(r.a);
+  if (!A || !B) return null;
+  const esLazo = r.de === r.a, borde = esLazo ? 26 : 0;
+  return { lado: ladoDe(A, B, esLazo), mag: Math.abs(r.curva),
+           x1: Math.min(A.x, B.x) - borde, x2: Math.max(A.x, B.x) + borde };
+}
+function acomodarRamas() {
+  const rectas = new Set(), puestos = [], enArco = [];
+  for (const r of S.ramas) {
+    const A = getNodo(r.de), B = getNodo(r.a);
+    if (!A || !B) continue;
+    if (r.curvaFija) { const t = tramoDe(r); if (t) puestos.push(t); continue; }
+    const par = [r.de, r.a].sort().join("|");
+    if (r.de !== r.a && !rectas.has(par) && !tapaUnNodo(A, B)) {
+      r.curva = 0; rectas.add(par);            // derecho: es la conexión directa
+    } else enArco.push(r);
+  }
+  // los arcos cortos primero, así los largos quedan por afuera
+  enArco.sort((a, b) => {
+    const ta = tramoDe(a), tb = tramoDe(b);
+    return (ta.x2 - ta.x1) - (tb.x2 - tb.x1);
+  });
+  for (const r of enArco) {
+    const t = tramoDe(r);
+    let mag = ARCO_BASE;
+    for (let k = 0; k < 60; k++) {
+      mag = ARCO_BASE + k * ARCO_PASO;
+      const choca = puestos.some(p => p.lado === t.lado && Math.abs(p.mag - mag) < 1 &&
+        Math.min(p.x2, t.x2) - Math.max(p.x1, t.x1) > 12);
+      if (!choca) break;
+    }
+    r.curva = t.lado === "lazo" ? mag : -mag;  // negativo: ida arriba, vuelta abajo
+    puestos.push({ lado: t.lado, mag, x1: t.x1, x2: t.x2 });
+  }
 }
 function ramaCerca(w) {                        // la rama más cercana al puntero, para el hover
   let best = null, bd = 14;
@@ -500,6 +565,7 @@ function renderNodo(n) {
   if (S.sel.includes(n.id)) el("rect", { class: "sel-box", x: -18, y: -30, width: 36, height: 48 }, g);
 }
 function render() {
+  acomodarRamas();
   gRamas.textContent = ""; gNodos.textContent = ""; gOv.textContent = "";
   viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
   $("#gridbg").style.display = S.showGrid ? "" : "none";
@@ -807,6 +873,9 @@ function renderInspector() {
         <input type="text" id="r-g" value="${esc(r.g)}" placeholder="G_1, -H, 1/s, 2.5"></div></div>
       <div class="row"><label>Curvatura</label><div class="fill">
         <input type="number" id="r-curva" step="6" value="${Math.round(r.curva)}"></div></div>
+      <div class="hint" style="margin:-2px 0 8px">${r.curvaFija
+        ? "Curvatura a mano. <b>Acomodar sola</b> la devuelve al reparto automático."
+        : "Se acomoda sola: 0 es línea recta y los arcos se separan para no encimarse."}</div>
       <div class="row"><label>Va de</label><div class="fill">
         <select id="r-de">${opcionesNodo(r.de)}</select></div></div>
       <div class="row"><label>Hasta</label><div class="fill">
@@ -814,6 +883,7 @@ function renderInspector() {
       <div class="iconbar" style="margin-top:10px">
         <button class="btn" id="r-invertir">Invertir sentido</button>
         <button class="btn" id="r-espejo">Arquear al otro lado</button>
+        <button class="btn" id="r-auto">Acomodar sola</button>
         <button class="btn" id="r-del">Borrar</button></div>
       <div class="hint" style="margin-top:8px">La transmitancia multiplica a la variable del nodo del
         que sale. Con <b>_</b> escribís subíndices: <b>G_1</b> se dibuja G₁.</div></div>`;
@@ -875,7 +945,7 @@ function wireInspector(nsel, rsel) {
     e.addEventListener("keydown", ev => ev.stopPropagation());
   };
   live("r-g", v => rsel.forEach(r => r.g = v));
-  live("r-curva", v => rsel.forEach(r => r.curva = +v || 0));
+  live("r-curva", v => rsel.forEach(r => { r.curva = +v || 0; r.curvaFija = true; }));
   live("n-nombre", v => nsel.forEach(n => n.nombre = v));
   live("n-x", v => nsel.forEach(n => n.x = +v));
   live("n-y", v => nsel.forEach(n => n.y = +v));
@@ -893,7 +963,8 @@ function wireInspector(nsel, rsel) {
 
   const bind = (id, fn) => { const e = document.getElementById(id); if (e) e.onclick = () => { fn(); commit(); render(); }; };
   bind("r-invertir", () => rsel.forEach(r => { const t = r.de; r.de = r.a; r.a = t; r.curva = -r.curva; }));
-  bind("r-espejo", () => rsel.forEach(r => r.curva = -r.curva));
+  bind("r-espejo", () => rsel.forEach(r => { r.curva = -r.curva || -ARCO_BASE; r.curvaFija = true; }));
+  bind("r-auto", () => rsel.forEach(r => delete r.curvaFija));
   bind("r-del", borrar);
   bind("n-del", borrar);
   bind("n-auto", () => nsel.forEach(n => S.ramas.push(nuevaRama(n.id, n.id, { g: "G" }))));
@@ -1072,8 +1143,11 @@ svg.addEventListener("pointerdown", ev => {
     render(); return;
   }
   if (pendiente === "nodo") {
+    const desde = nodoDeSalida();              // se engancha solo al anterior
     const n = nuevoNodo(snapV(w.x), snapV(w.y));
-    S.nodos.push(n); S.sel = [n.id]; S.selR = [];
+    S.nodos.push(n);
+    if (desde) S.ramas.push(nuevaRama(desde.id, n.id));
+    S.sel = [n.id]; S.selR = [];
     setPendiente(null); commit(); render(); return;
   }
   const nid = idDeNodo(t);
@@ -1187,6 +1261,7 @@ window.addEventListener("keyup", ev => { if (ev.code === "Space") spaceDown = fa
 
 function fit() {
   if (!S.nodos.length) { S.zoom = 1; S.pan = { x: 90, y: 70 }; render(); return; }
+  acomodarRamas();                             // el encuadre tiene que ver los arcos ya acomodados
   const b = bboxAll(), r = svg.getBoundingClientRect(), m = 60;
   S.zoom = Math.max(.2, Math.min((r.width - m * 2) / Math.max(1, b.r - b.l),
                                  (r.height - m * 2) / Math.max(1, b.b - b.t), 2));
@@ -1366,7 +1441,7 @@ function cargarEjemplo(cual) {
     const n = nuevoNodo(x, y, { nombre, tipo: tipo || "normal" });
     K[k] = n.id; S.nodos.push(n); return n;
   };
-  const rama = (a, b, g, curva) => S.ramas.push(nuevaRama(K[a], K[b], curva === undefined ? { g } : { g, curva }));
+  const rama = (a, b, g) => S.ramas.push(nuevaRama(K[a], K[b], { g }));   // la curva la acomoda sola
 
   if (cual === "simple") {
     nodo("R", "R", 0, 0, "entrada"); nodo("x1", "x_1", 180, 0); nodo("x2", "x_2", 380, 0);
