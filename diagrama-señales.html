@@ -762,18 +762,32 @@ function ecuaciones() {
    el JSON se abre allá y se puede seguir editando. */
 const MENOS = "−";
 const aGrilla = (v) => Math.round(v / 20) * 20;
-const ANCHO_BLOQUE = 72, ALTO_BLOQUE = 42;
-/* El aire se mide en cuadraditos de la grilla: uno solo de margen entre cualquier
-   cosa y la de al lado alcanza para que se lea prolijo sin quedar desparramado. */
-const AIRE = 20, MEDIO_SUMA = 25, MEDIO_PUNTO = 5;
-const SALTO_BIF = 60;                          // del sumador a su punto de bifurcación
-/* Centra el bloque en el hueco que queda entre dos elementos, pegado a la grilla,
-   pero sin dejar que el redondeo le coma el cuadradito de margen a ningún lado. */
-function enElHueco(A, B) {
-  const desde = A.x + A.w / 2, hasta = B.x - B.w / 2;
-  const min = desde + AIRE + ANCHO_BLOQUE / 2, max = hasta - AIRE - ANCHO_BLOQUE / 2;
-  if (min > max) return (desde + hasta) / 2;   // no entra: al menos que quede centrado
-  return Math.min(Math.max(aGrilla((desde + hasta) / 2), min), max);
+const ALTO_BLOQUE = 40, ANCHO_SUMA = 50, ALTO_SUMA = 50;
+/* El aire se mide en cuadraditos de la grilla: uno entre cosas que van pegadas
+   —el sumador y su bifurcación— y uno y medio a lo largo de la línea. */
+const AIRE = 20, AIRE_X = 30;
+const PISO_ARCO = 60;                          // primer nivel de arcos, contra la línea principal
+/* Corre el bloque a lo largo de su tramo hasta encontrar un lugar donde no quede
+   pegado a nada: arranca del medio y va probando para los dos lados. Devuelve null
+   si en ese tramo no hay lugar, para que el que llama lo baje un nivel. */
+function xLibre(bl, x1, x2, puestos) {
+  const estorban = puestos.filter(e => Math.abs(e.y - bl.y) < (e.h + bl.h) / 2 + AIRE);
+  const choca = (x) => estorban.some(e => Math.abs(e.x - x) < (e.w + bl.w) / 2 + AIRE);
+  const centro = (x1 + x2) / 2, alcance = Math.max(0, (x2 - x1) / 2);
+  for (let d = 0; d <= alcance; d += AIRE)
+    for (const x of (d ? [centro - d, centro + d] : [centro]))
+      if (!choca(aGrilla(x))) return aGrilla(x);
+  return null;
+}
+/* Los bloques los redimensiona el editor de bloques según lo que digan, así que
+   acá alcanza con estimar el ancho para dejarles el lugar. */
+const anchoTextoAprox = (s, tam) => Math.max(26, String(s == null ? "" : s)
+  .replace(/_/g, "").length * tam * 0.62);
+/* La transmitancia como se ve en el bloque: si el destino es un sumador, el signo
+   se lo queda el sumador y el bloque queda en positivo. */
+function etiquetaDeRama(r, destino) {
+  const g = String(r.g == null ? "1" : r.g).trim();
+  return (destino && destino.type === "sum" && /^-/.test(g)) ? g.slice(1).trim() : g;
 }
 /* Por dónde sale y por dónde entra cada rama. La recta va por la línea principal;
    los arcos de ida —los prealimentados— por arriba, y los de vuelta por abajo.
@@ -792,38 +806,27 @@ function equivalenteEnBloques() {
   const entraEn = new Map(), saleDe = new Map();   // nodo del grafo -> dónde llega / de dónde sale
   const puerto = new Map();                       // rama -> pata por la que entra
 
-  // Escala horizontal: en el tramo más corto tienen que entrar, uno atrás del otro,
-  // la bifurcación que a veces sigue al sumador, el bloque, y aire a los costados.
-  let paso = Infinity;
-  for (const r of S.ramas) {
-    const A = getNodo(r.de), B = getNodo(r.a);
-    if (A && B && r.de !== r.a && Math.abs(B.x - A.x) > 1) paso = Math.min(paso, Math.abs(B.x - A.x));
-  }
-  if (!isFinite(paso)) paso = 140;
-  // el tramo más corto tiene que aguantar, en fila: la bifurcación que a veces sigue
-  // al sumador, un cuadradito de aire, el bloque, otro cuadradito, y medio sumador.
-  // El tercer AIRE es para que el redondeo a la grilla no se coma el margen.
-  const TRAMO = SALTO_BIF + MEDIO_PUNTO + ANCHO_BLOQUE + MEDIO_SUMA + 3 * AIRE;
-  const escX = Math.max(1.4, TRAMO / paso), escY = Math.min(escX, 2.4);
-  const gx = (v) => aGrilla(v * escX), gy = (v) => aGrilla(v * escY);
+  // Vertical: sólo hace falta estirar si el grafo tiene nodos a distintas alturas
+  let pasoY = Infinity;
+  for (const a of S.nodos) for (const b of S.nodos)
+    if (a !== b && Math.abs(a.y - b.y) > 1) pasoY = Math.min(pasoY, Math.abs(a.y - b.y));
+  const escY = isFinite(pasoY) ? Math.max(1, (ALTO_SUMA + 2 * AIRE) / pasoY) : 1;
+  const gy = (v) => aGrilla(v * escY);
 
-  // Los arcos se ordenan por profundidad: cuanto más lejos van, más afuera se dibujan
-  const magnitudes = Array.from(new Set(S.ramas.filter(r => r.curva).map(r => Math.abs(r.curva))))
-    .sort((a, b) => a - b);
-  const nivelDe = (r) => Math.max(0, magnitudes.indexOf(Math.abs(r.curva)));
 
   const agregar = (e) => { nodes.push(e); return e; };
   const unir = (A, pA, B, pB) =>
     edges.push({ id: eid(), from: { id: A.id, port: pA }, to: { id: B.id, port: pB }, variant: 0 });
 
-  for (const n of S.nodos) {
+  const enOrden = S.nodos.slice().sort((a, b) => a.x - b.x);
+  for (const n of enOrden) {
     const ent = S.ramas.filter(r => r.a === n.id);
     const sal = S.ramas.filter(r => r.de === n.id);
-    const x = gx(n.x), y = gy(n.y);
-    const base = () => ({ id: nid(), x, y, label: "", font: 14 });
+    const base = () => ({ id: nid(), x: 0, y: gy(n.y), label: "", font: 14 });
     let llega, parte;
     if (n.tipo !== "normal" || !ent.length) {      // entrada, salida o nodo sin nada que le entre
-      llega = parte = agregar(Object.assign(base(), { type: "io", w: 46, h: 22, label: n.nombre }));
+      llega = parte = agregar(Object.assign(base(),
+        { type: "io", w: anchoTextoAprox(n.nombre, 14) + 12, h: 20, label: n.nombre }));
     } else if (ent.length >= 2) {                  // varias ramas entrando: sumador
       const signos = { l: "", t: "", r: "", b: "" };
       const prefe = { recto: ["l", "t", "b", "r"], t: ["t", "l", "b", "r"], b: ["b", "l", "t", "r"] };
@@ -833,9 +836,9 @@ function equivalenteEnBloques() {
         puerto.set(r.id, p);
       }
       llega = parte = agregar(Object.assign(base(),
-        { type: "sum", w: 50, h: 50, font: 13, signs: signos, cross: true }));
+        { type: "sum", w: ANCHO_SUMA, h: ALTO_SUMA, font: 13, signs: signos, cross: true }));
       if (sal.length >= 2) {                       // y si además reparte, va un punto de bifurcación
-        parte = agregar(Object.assign(base(), { type: "node", w: 10, h: 10, x: x + SALTO_BIF }));
+        parte = agregar(Object.assign(base(), { type: "node", w: 10, h: 10 }));
         unir(llega, "r", parte, "l");
       }
     } else {                                       // una sola entrada: un punto sobre la línea
@@ -844,32 +847,89 @@ function equivalenteEnBloques() {
     entraEn.set(n.id, llega); saleDe.set(n.id, parte);
   }
 
+  /* Acomodo de izquierda a derecha: cada cosa se apoya contra la anterior dejando
+     el aire justo. Un paso de columna único no sirve, porque le da a los tramos
+     vacíos el mismo espacio que a los que tienen que alojar un bloque. */
+  const bloqueDeRecta = new Map();                 // rama recta con bloque -> su elemento
+  let borde = 0;
+  // se pega a la grilla en el momento, no al final: si no, el redondeo se come el aire
+  const apoyar = (e, aire) => {
+    e.x = aGrilla(borde + aire + e.w / 2);
+    if (e.x - e.w / 2 < borde + aire - 0.5) e.x += 20;
+    borde = e.x + e.w / 2;
+  };
+  enOrden.forEach((n, i) => {
+    const llega = entraEn.get(n.id), parte = saleDe.get(n.id);
+    apoyar(llega, i === 0 ? -llega.w / 2 : AIRE_X);
+    if (parte !== llega) apoyar(parte, AIRE);      // la bifurcación va pegada a su sumador
+    const sig = enOrden[i + 1];
+    if (!sig) return;
+    const r = S.ramas.find(x => x.de === n.id && x.a === sig.id && ladoDeRama(x) === "recto");
+    const et = r && etiquetaDeRama(r, entraEn.get(r.a));
+    if (!et || et === "1") return;                 // sin bloque en el medio: siguen de largo
+    const bl = agregar({ id: nid(), type: "block", h: ALTO_BLOQUE, font: 15, label: et,
+      w: anchoTextoAprox(et, 15) + 30, x: 0, y: gy((n.y + sig.y) / 2) });
+    apoyar(bl, AIRE_X);
+    bloqueDeRecta.set(r.id, bl);
+  });
+
+
+  /* Altura de cada arco: la más cerca de la línea principal que no choque, y contando
+     arriba y abajo por separado. Dos líneas que se pisan en x se separan un poco; si
+     además se pisan los bloques, hace falta el alto del bloque entero. */
+  const alturaDeArco = new Map(), puestos = { t: [], b: [] };
+  const franjaDe = (r) => {
+    const A = saleDe.get(r.de), B = entraEn.get(r.a);
+    if (!A || !B) return null;
+    const et = etiquetaDeRama(r, B), lleva = et !== "1" && et !== "";
+    const ancho = lleva ? anchoTextoAprox(et, 15) + 30 : 0;
+    const bx = r.de === r.a ? A.x : (A.x + B.x) / 2;
+    return { x1: Math.min(A.x, B.x), x2: Math.max(A.x, B.x),
+             bx1: lleva ? bx - ancho / 2 : 0, bx2: lleva ? bx + ancho / 2 : -1 };
+  };
+  S.ramas.filter(r => ladoDeRama(r) !== "recto")
+    .map(r => ({ r, f: franjaDe(r) })).filter(o => o.f)
+    .sort((a, b) => (a.f.x2 - a.f.x1) - (b.f.x2 - b.f.x1))   // los cortos, más cerca de la línea
+    .forEach(({ r, f }) => {
+      const lista = puestos[ladoDeRama(r)] || puestos.b;
+      let h = PISO_ARCO;
+      while (lista.some(c => {
+        const lineas = Math.min(c.x2, f.x2) - Math.max(c.x1, f.x1) > 4;
+        // dos bloques a menos de un cuadradito de distancia ya se leen como uno solo
+        const bloques = Math.min(c.bx2, f.bx2) - Math.max(c.bx1, f.bx1) > -AIRE;
+        if (!lineas && !bloques) return false;
+        return Math.abs(c.h - h) < (bloques ? ALTO_BLOQUE + AIRE : AIRE);
+      })) h += AIRE;
+      lista.push(Object.assign({ h }, f));
+      alturaDeArco.set(r.id, h);
+    });
+
   for (const r of S.ramas) {
     const A = saleDe.get(r.de), B = entraEn.get(r.a);
     if (!A || !B) continue;
-    const g = String(r.g == null ? "1" : r.g).trim();
-    const alSumador = B.type === "sum";
-    // si el destino es un sumador, el signo se lo queda el sumador y el bloque va en positivo
-    const etiqueta = (alSumador && /^-/.test(g)) ? g.slice(1).trim() : g;
+    const etiqueta = etiquetaDeRama(r, B);
     const lado = ladoDeRama(r);
     const pSal = lado === "recto" ? "r" : lado;
-    const pEnt = alSumador ? (puerto.get(r.id) || "l") : (lado === "recto" ? "l" : lado);
+    const pEnt = B.type === "sum" ? (puerto.get(r.id) || "l") : (lado === "recto" ? "l" : lado);
     if (etiqueta === "1" || etiqueta === "") {      // transmitancia 1: línea pelada, sin bloque
       unir(A, pSal, B, pEnt);
       continue;
     }
-    // fuera de la línea principal: un cuadradito libre contra la línea, y otro
-    // entre un nivel de arcos y el siguiente
-    const hueco = 4 * AIRE + nivelDe(r) * (ALTO_BLOQUE + 2 * AIRE);
-    // en la línea principal el bloque va centrado en el hueco libre, no entre los
-    // centros: si al sumador le sigue una bifurcación, el hueco arranca después de ella
-    const bl = agregar({
-      id: nid(), type: "block", w: ANCHO_BLOQUE, h: ALTO_BLOQUE, font: 15, label: etiqueta,
-      x: r.de === r.a ? A.x : lado === "recto" ? enElHueco(A, B) : aGrilla((A.x + B.x) / 2),
-      y: lado === "recto" ? aGrilla((A.y + B.y) / 2)
-        : lado === "t" ? aGrilla(Math.min(A.y, B.y) - hueco)
-        : aGrilla(Math.max(A.y, B.y) + hueco)
-    });
+    let bl = bloqueDeRecta.get(r.id);               // las rectas ya quedaron ubicadas al acomodar
+    if (!bl) {
+      bl = { id: nid(), type: "block", h: ALTO_BLOQUE, font: 15, label: etiqueta,
+        w: anchoTextoAprox(etiqueta, 15) + 30, x: 0, y: 0 };
+      const x1 = Math.min(A.x, B.x), x2 = Math.max(A.x, B.x);
+      // dentro de su tramo el bloque se corre hasta donde no le pegue a nada; si en
+      // ese tramo no entra —una realimentación corta, por ejemplo— baja un nivel
+      let hueco = alturaDeArco.get(r.id) || PISO_ARCO, x = null;
+      for (let intento = 0; intento < 10 && x === null; intento++, hueco += AIRE) {
+        bl.y = aGrilla(lado === "t" ? Math.min(A.y, B.y) - hueco : Math.max(A.y, B.y) + hueco);
+        x = r.de === r.a ? aGrilla(A.x) : xLibre(bl, x1, x2, nodes);
+      }
+      bl.x = x === null ? aGrilla((x1 + x2) / 2) : x;
+      agregar(bl);
+    }
     // el bloque se atraviesa siempre de izquierda a derecha en la ida y al revés en la vuelta
     const entraAlBloque = lado === "b" ? "r" : "l", saleDelBloque = lado === "b" ? "l" : "r";
     unir(A, pSal, bl, entraAlBloque);
