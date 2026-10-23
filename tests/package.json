@@ -1,0 +1,14 @@
+{
+  "name": "uni-tools-tests",
+  "private": true,
+  "description": "Pruebas automáticas de uni-tools. Viven acá para que la raíz del repo siga sin npm ni build: las herramientas son HTML sueltos.",
+  "scripts": {
+    "test": "playwright test",
+    "test:unidades": "node --test \"unidades/*.test.js\"",
+    "test:ui": "playwright test --ui",
+    "reporte": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}

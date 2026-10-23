@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<!-- Archivo armado por src/construir.js: no se edita a mano. Las fuentes están en src/bloque/ y src/comun/. -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de diagramas de bloques</title>
+<link rel="icon" type="image/png" href="uni-tools-marca.png">
+<style>
+/* @incluir comun/base.css */
+/* @incluir bloque/estilos.css */
+</style>
+</head>
+</head>
+<body>
+
+<header>
+<!-- @incluir comun/inicio.html -->
+  <div class="brand"><b>Diagramas de bloques</b><span>lazo cerrado</span></div>
+
+  <div class="group collapsed">
+    <span class="glab">Modo</span>
+    <button class="btn on" id="m-select" title="Seleccionar / mover (V)">
+      <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg>Selección</button>
+    <button class="btn" id="m-multi" title="Selección múltiple (X): cada clic suma o saca, sin tener que usar Shift">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="10" rx="1.5"/><rect x="11" y="11" width="10" height="10" rx="1.5"/></svg>Selección múltiple</button>
+    <button class="btn" id="m-connect" title="Conectar (C)">
+      <svg viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M13 8l4 4-4 4"/><circle cx="20" cy="12" r="1.5"/></svg>Conectar</button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Edición</span>
+<!-- @incluir comun/deshacer.html -->
+    <button class="btn ghost" id="b-dup" title="Duplicar (Ctrl+D)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg><span>Duplicar</span> <kbd>Ctrl+D</kbd></button>
+<!-- @incluir comun/borrar.html -->
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Alinear</span>
+    <button class="btn ghost" data-align="left" title="Alinear a la izquierda">
+      <svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4"/><rect x="7" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="cx" title="Centrar vertical (mismo eje X)">
+      <svg viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="5" y="6" width="14" height="4"/><rect x="8" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="right" title="Alinear a la derecha">
+      <svg viewBox="0 0 24 24"><path d="M20 3v18"/><rect x="5" y="6" width="12" height="4"/><rect x="9" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="top" title="Alinear arriba">
+      <svg viewBox="0 0 24 24"><path d="M3 4h18"/><rect x="6" y="7" width="4" height="12"/><rect x="14" y="7" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="cy" title="Centrar horizontal (misma línea)">
+      <svg viewBox="0 0 24 24"><path d="M3 12h18"/><rect x="6" y="5" width="4" height="14"/><rect x="14" y="8" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="bottom" title="Alinear abajo">
+      <svg viewBox="0 0 24 24"><path d="M3 20h18"/><rect x="6" y="5" width="4" height="12"/><rect x="14" y="9" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="dh" title="Distribuir horizontal">
+      <svg viewBox="0 0 24 24"><path d="M3 4v16M21 4v16"/><rect x="10" y="8" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="dv" title="Distribuir vertical">
+      <svg viewBox="0 0 24 24"><path d="M4 3h16M4 21h16"/><rect x="8" y="10" width="8" height="4"/></svg></button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Grilla</span>
+    <button class="btn on" id="b-snap" title="Imantar a la grilla">
+      <svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>Imán</button>
+    <select id="gridsize" style="width:70px" title="Paso de grilla">
+      <option value="10">10 px</option><option value="20" selected>20 px</option>
+      <option value="25">25 px</option><option value="40">40 px</option>
+    </select>
+    <button class="btn ghost" id="b-gridshow" title="Ver grilla">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M4 12h16M12 4v16"/></svg></button>
+    <button class="btn ghost" id="b-snapall" title="Imantar todo a la grilla">Ajustar todo</button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Vista</span>
+<!-- @incluir comun/zoom.html -->
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Archivo</span>
+<!-- @incluir comun/archivo.html -->
+    <select id="b-hoja" style="width:128px" title="Área de impresión: marca en la hoja lo que va a entrar en el SVG y en el PNG"></select>
+    <button class="btn ghost" id="b-example" title="Cargar diagrama de ejemplo">Ejemplo</button>
+    <button class="btn ghost" id="b-clear" title="Vaciar la hoja">Vaciar</button>
+    <button class="btn ghost" id="b-svg">SVG</button>
+    <button class="btn ghost" id="b-png">PNG</button>
+    <button class="btn ghost" id="b-save">Guardar</button>
+    <button class="btn ghost" id="b-open">Abrir</button>
+    <button class="btn ghost" id="b-help" title="Atajos (?)">?</button>
+  </div>
+
+<!-- @incluir comun/marca-y-panel.html -->
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="canvas">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
+                orient="auto-start-reverse" markerUnits="strokeWidth">
+          <path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="#101418"/>
+        </marker>
+        <marker id="arrowSel" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="7" markerHeight="7"
+                orient="auto-start-reverse" markerUnits="strokeWidth">
+          <path d="M0.5 1.2 L9.5 5 L0.5 8.8 z" fill="#0d5bd6"/>
+        </marker>
+<!-- @incluir comun/grilla.html -->
+      </defs>
+      <g id="gMeasure" style="visibility:hidden;pointer-events:none"></g>
+      <g id="viewport">
+        <rect id="gridbg" x="-6000" y="-6000" width="14000" height="14000" fill="url(#gridPat10)"/>
+        <g id="gAtras"></g>
+        <g id="gEdges"></g>
+        <g id="gNodes"></g>
+        <g id="gOverlay"></g>
+      </g>
+    </svg>
+
+    <div id="palette">
+      <div class="ptitle">INSERTAR</div>
+      <button class="ptool" data-add="block"><svg viewBox="0 0 30 22"><rect x="4" y="4" width="22" height="14"/><path d="M0 11h4M26 11h4"/></svg><span>Bloque G(s)</span><kbd>B</kbd></button>
+      <button class="ptool" data-add="sum"><svg viewBox="0 0 30 22"><circle cx="15" cy="11" r="8"/><path d="M9.3 5.3l11.4 11.4M20.7 5.3L9.3 16.7"/></svg><span>Sumador</span><kbd>S</kbd></button>
+      <button class="ptool" data-add="node"><svg viewBox="0 0 30 22"><path d="M2 11h26M15 11v9"/><circle cx="15" cy="11" r="2.6" fill="currentColor"/></svg><span>Bifurcación en flecha</span><kbd>N</kbd></button>
+      <button class="ptool" data-add="io"><svg viewBox="0 0 30 22"><text x="2" y="15" font-size="10" fill="currentColor" stroke="none">R(s)</text><path d="M18 11h10M25 8l3 3-3 3"/></svg><span>Entrada / salida</span><kbd>E</kbd></button>
+      <button class="ptool" data-add="text"><svg viewBox="0 0 30 22"><path d="M6 6h18M15 6v12"/></svg><span>Texto libre</span><kbd>T</kbd></button>
+      <button class="ptool" data-add="marco"><svg viewBox="0 0 30 22"><rect x="3" y="3" width="24" height="16" stroke-dasharray="4 3"/></svg><span>Recuadro</span><kbd>M</kbd></button>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+
+  <aside id="inspector"><div id="insp"></div></aside>
+</main>
+
+<div id="status">
+  <span><span class="k">Elementos</span> <span id="st-n">0</span></span>
+  <span><span class="k">Flechas</span> <span id="st-e">0</span></span>
+  <span><span class="k">Selección</span> <span id="st-s">—</span></span>
+  <span class="atajos" id="atajos">
+    <span class="k">Atajos:</span>
+    <span data-modo="select"><kbd>V</kbd> Selección</span>
+    <span data-modo="multi"><kbd>X</kbd> Múltiple</span>
+    <span data-modo="connect"><kbd>C</kbd> Conectar</span>
+    <span data-add="block"><kbd>B</kbd> Bloque</span>
+    <span data-add="sum"><kbd>S</kbd> Sumador</span>
+    <span data-add="node"><kbd>N</kbd> Bifurc.</span>
+    <span data-add="io"><kbd>E</kbd> E/S</span>
+    <span data-add="text"><kbd>T</kbd> Texto</span>
+    <span data-add="marco"><kbd>M</kbd> Recuadro</span>
+    <span><kbd>Ctrl+D</kbd> Duplicar</span>
+    <span><kbd>F</kbd> Encuadrar</span>
+    <span><kbd>Esc</kbd> Soltar</span>
+    <span><kbd>?</kbd> Ayuda</span>
+  </span>
+  <span id="st-hint" style="margin-left:auto"></span>
+</div>
+
+<div class="overlay" id="ov-help"><div class="modal">
+  <h2>Atajos y cómo se usa</h2>
+  <p class="sub">Todo el diagrama vive en tu navegador. Guardá con “Guardar” para no perderlo.</p>
+  <table>
+    <tr><td><kbd>V</kbd> / <kbd>X</kbd> / <kbd>C</kbd></td><td>Modo selección / selección múltiple / conectar</td></tr>
+    <tr><td><kbd>B</kbd><kbd>S</kbd><kbd>N</kbd><kbd>E</kbd><kbd>T</kbd><kbd>M</kbd></td><td>Insertar bloque, sumador, bifurcación, entrada-salida, texto, recuadro</td></tr>
+    <tr><td>Modos y herramientas</td><td>Son excluyentes: elegir una herramienta sale del modo, y elegir un modo suelta la herramienta. Al colocar el elemento se vuelve a Selección. <kbd>Esc</kbd> suelta la herramienta (o el modo) y vuelve a Selección. Los atajos están siempre en la franja de abajo.</td></tr>
+    <tr><td>Bifurcación</td><td>Elegí la herramienta y hacé clic en una flecha: se inserta en el medio y parte la línea en dos</td></tr>
+    <tr><td>Arrastrar desde un punto azul</td><td>Crea una flecha hacia otro elemento; si la soltás sobre la hoja libre, ahí queda una bifurcación</td></tr>
+    <tr><td>Entradas de un bloque</td><td>Un bloque tiene una sola entrada: si tirás una segunda flecha, avisa y no la crea (para juntar dos señales usá un sumador). Si un archivo o el autoguardado traen entradas de más, al abrirlo se deja una sola</td></tr>
+    <tr><td>Doble clic</td><td>Renombrar el elemento</td></tr>
+    <tr><td>Ecuaciones</td><td><kbd>K/(s+1)</kbd> apila la fracción, y también adentro de paréntesis:
+      <kbd>(G_2/H_1)*(G_4/H_2)</kbd>. Las divisiones seguidas se juntan en una sola fracción
+      (<kbd>a/b/c</kbd> deja <kbd>b·c</kbd> abajo) y los paréntesis crecen con lo que contienen.
+      Además <kbd>s^2</kbd> o <kbd>s^-1</kbd> exponente, <kbd>H_2</kbd> o <kbd>H2</kbd> subíndice (<kbd>H_{ent}</kbd> si son varias letras),
+      <kbd>\omega \zeta \tau</kbd> griegas y <kbd>\frac{a}{b}</kbd> forzado.
+      El bloque se agranda solo para que entre.</td></tr>
+    <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Cortar (Ctrl+X) también vale: el primer pegado vuelve al mismo lugar. Copiar y pegar lo seleccionado (con sus flechas internas); cada pegado sale un poco más corrido</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>Seleccionar todo</td></tr>
+    <tr><td>Flechas</td><td>Mover 1 paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
+    <tr><td>Pantalla táctil</td><td>Un dedo en el fondo mueve la hoja; un dedo sobre un elemento lo
+      selecciona y lo arrastra; dos dedos hacen zoom</td></tr>
+    <tr><td>Rueda / Espacio / <kbd>Ctrl</kbd>+clic</td><td>Mueve el lienzo (con el botón del medio, la barra espaciadora o <kbd>Ctrl</kbd> + clic izquierdo arrastrando) · <kbd>Ctrl</kbd>+rueda hace zoom · <kbd>Shift</kbd>+rueda a lo ancho</td></tr>
+    <tr><td>Espacio / botón central</td><td>Mover la hoja</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Encuadrar todo</td></tr>
+    <tr><td>Flecha seleccionada</td><td>“Ruta alternativa” prueba el siguiente camino sin superposiciones</td></tr>
+    <tr><td>Arrastrar un tramo de flecha</td><td>Con la flecha seleccionada, tirá de los cuadraditos del medio de cada tramo (o de la línea) para correrlo; “Ruta automática” la suelta</td></tr>
+    <tr><td>Tiradores de las esquinas</td><td>Con un bloque, sumador o recuadro seleccionado, estiran su tamaño (el recuadro también por los lados)</td></tr>
+  </table>
+  <div style="margin-top:16px;text-align:right"><button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button></div>
+</div></div>
+
+<!-- @incluir comun/ventana-abrir.html titulo="Abrir diagrama" cosa="diagrama" nodos="nodes" conexiones="edges" -->
+
+<script>
+// @incluir comun/lienzo.js
+// @incluir bloque/herramienta.js
+// @incluir comun/ids.js
+// @incluir comun/documento.js
+// @incluir comun/historial.js
+// @incluir comun/portapapeles.js
+// @incluir comun/vista.js
+// @incluir comun/panel.js
+// @incluir comun/recuadros.js
+// @incluir comun/colores.js
+// @incluir comun/hoja.js
+// @incluir comun/ortogonal.js
+// @incluir bloque/modelo.js
+// @incluir bloque/ruteo.js
+// @incluir bloque/ecuaciones.js
+// @incluir bloque/dibujo.js
+// @incluir bloque/panel.js
+// @incluir bloque/exportar.js
+// @incluir comun/doble-clic.js
+// @incluir comun/tactil.js
+// @incluir bloque/interaccion.js
+// @incluir bloque/comandos.js
+// @incluir comun/teclado.js
+// @incluir comun/barra.js
+// @incluir bloque/barra.js
+// @incluir bloque/ejemplo.js
+// @incluir comun/autoguardado.js
+// @incluir bloque/arranque.js
+</script>
+</body>
+</html>

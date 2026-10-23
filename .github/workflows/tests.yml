@@ -1,0 +1,71 @@
+# Pruebas automáticas de las tres herramientas (Playwright + Chromium).
+# Corre en cada push a main o features y en cada pull request. NO despliega nada:
+# el despliegue a GitHub Pages sigue siendo static.yml.
+name: Pruebas
+
+on:
+  push:
+    branches: ["main", "features"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Las páginas están al día con src/
+        run: node src/construir.js --comprobar
+
+      - name: El JavaScript de cada página parsea
+        run: |
+          node -e "
+          const fs = require('fs'), vm = require('vm');
+          for (const f of fs.readdirSync('.').filter(f => f.endsWith('.html'))) {
+            const s = fs.readFileSync(f, 'utf8');
+            const bloques = [...s.matchAll(/<script>\r?\n([\s\S]*?)<\/script>/g)];
+            bloques.forEach(m => new vm.Script(m[1], { filename: f }));
+            console.log('OK', f, '(' + bloques.length + ' script)');
+          }"
+
+      - name: Pruebas unitarias de los cálculos puros (sin navegador)
+        run: node --test "tests/unidades/*.test.js"
+
+      - name: Instalar dependencias de las pruebas
+        working-directory: tests
+        run: npm ci
+
+      - name: Instalar Chromium y Firefox
+        working-directory: tests
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Correr las pruebas
+        working-directory: tests
+        run: npx playwright test
+
+      - name: Subir el reporte (si algo falló)
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: reporte-playwright
+          path: |
+            tests/playwright-report/
+            tests/test-results/
+          retention-days: 14

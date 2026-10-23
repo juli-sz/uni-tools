@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<!-- Archivo armado por src/construir.js: no se edita a mano. Las fuentes están en src/simulador/ y src/comun/. -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de circuitos lógicos</title>
+<link rel="icon" type="image/png" href="uni-tools-marca.png">
+<meta name="description" content="Compuertas, cables con ruteo automático, simulación en vivo y tabla de verdad">
+<style>
+/* @incluir comun/base.css */
+/* @incluir simulador/estilos.css */
+</style>
+</head>
+<body>
+
+<header>
+<!-- @incluir comun/inicio.html -->
+  <div class="brand"><b>Circuitos lógicos</b><span>simulador</span></div>
+
+  <div class="group collapsed">
+    <span class="glab">Edición</span>
+<!-- @incluir comun/deshacer.html -->
+    <button class="btn ghost" id="b-dup" title="Duplicar (Ctrl+D)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg><span>Duplicar</span> <kbd>Ctrl+D</kbd></button>
+<!-- @incluir comun/borrar.html -->
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Alinear</span>
+    <button class="btn ghost" data-align="left" title="Izquierda"><svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4"/><rect x="7" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="cx" title="Mismo eje X"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="5" y="6" width="14" height="4"/><rect x="8" y="14" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="cy" title="Misma línea"><svg viewBox="0 0 24 24"><path d="M3 12h18"/><rect x="6" y="5" width="4" height="14"/><rect x="14" y="8" width="4" height="8"/></svg></button>
+    <button class="btn ghost" data-align="dv" title="Distribuir vertical"><svg viewBox="0 0 24 24"><path d="M4 3h16M4 21h16"/><rect x="8" y="10" width="8" height="4"/></svg></button>
+    <button class="btn ghost" data-align="dh" title="Distribuir horizontal"><svg viewBox="0 0 24 24"><path d="M3 4v16M21 4v16"/><rect x="10" y="8" width="4" height="8"/></svg></button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Grilla</span>
+    <button class="btn on" id="b-snap" title="Imantar"><svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>Imán</button>
+    <button class="btn ghost" id="b-gridshow" title="Ver grilla"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M4 12h16M12 4v16"/></svg></button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Vista</span>
+<!-- @incluir comun/zoom.html -->
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Circuito</span>
+    <button class="btn" id="b-truth" title="Tabla de verdad (T)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"/><path d="M3 9h18M9 9v11"/></svg>Tabla de verdad</button>
+    <select id="ejemplos" style="width:126px" title="Cargar un circuito de ejemplo">
+      <option value="">Ejemplos…</option>
+      <option value="half">Semisumador</option>
+      <option value="full">Sumador completo</option>
+      <option value="latch">Latch SR</option>
+      <option value="mux">Multiplexor 2 a 1</option>
+      <option value="cont">Contador binario (JK)</option>
+      <option value="regd">Registro con biestable D</option>
+    </select>
+    <button class="btn ghost" id="b-clear">Vaciar</button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Archivo</span>
+<!-- @incluir comun/archivo.html -->
+    <select id="b-hoja" style="width:128px" title="Área de impresión: marca en la hoja lo que va a entrar en el SVG y en el PNG"></select>
+    <button class="btn ghost" id="b-svg">SVG</button>
+    <button class="btn ghost" id="b-png">PNG</button>
+    <button class="btn ghost" id="b-save">Guardar</button>
+    <button class="btn ghost" id="b-open">Abrir</button>
+    <button class="btn ghost" id="b-help">?</button>
+  </div>
+<!-- @incluir comun/marca-y-panel.html -->
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="canvas">
+      <defs>
+<!-- @incluir comun/grilla.html -->
+      </defs>
+      <g id="viewport">
+        <rect id="gridbg" x="-6000" y="-6000" width="14000" height="14000" fill="url(#gridPat10)"/>
+        <g id="gAtras"></g>
+        <g id="gWires"></g>
+        <g id="gNodes"></g>
+        <g id="gOverlay"></g>
+      </g>
+    </svg>
+    <div id="palette"></div>
+    <div id="toast"></div>
+  </div>
+
+  <aside id="inspector"><div id="insp"></div></aside>
+</main>
+
+<div id="status">
+  <span><span class="k">Compuertas</span> <span id="st-n">0</span></span>
+  <span><span class="k">Cables</span> <span id="st-e">0</span></span>
+  <span><span class="k">Selección</span> <span id="st-s">—</span></span>
+  <span id="st-warn"></span>
+  <span style="display:flex;gap:8px;align-items:center;margin-left:8px;color:var(--ink-2)">
+    <span class="k">Atajos:</span>
+    <span><kbd>Ctrl+D</kbd> Duplicar</span>
+    <span><kbd>R</kbd> Girar</span>
+    <span><kbd>Supr</kbd> Borrar</span>
+    <span><kbd>F</kbd> Encuadrar</span>
+    <span><kbd>?</kbd> Ayuda</span>
+  </span>
+  <span id="st-hint" style="margin-left:auto"></span>
+</div>
+
+<div class="overlay" id="ov-truth"><div class="modal">
+  <h2>Tabla de verdad</h2>
+  <p class="sub" id="tt-sub"></p>
+  <div id="tt-body"></div>
+</div></div>
+
+<div class="overlay" id="ov-help"><div class="modal">
+  <h2>Cómo se usa</h2>
+  <p class="sub">El circuito se simula solo: cada cambio recalcula y los cables en 1 se pintan de verde.</p>
+  <table class="help">
+    <tr><td>Clic en un interruptor</td><td>Cambia su valor entre 0 y 1</td></tr>
+    <tr><td>Arrastrar desde un pin</td><td>Cablea salida → entrada, sin activar ningún modo. Pasá el mouse por una compuerta y aparecen sus pines. Cada entrada admite un solo cable; una salida puede ir a varias</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td>AND, OR, NOT, NAND, NOR, XOR, XNOR</td></tr>
+    <tr><td><kbd>I</kbd> / <kbd>O</kbd> / <kbd>L</kbd> / <kbd>P</kbd></td><td>Entrada, salida, texto, pulso de reloj</td></tr>
+    <tr><td><kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd></td><td>Biestable RS, JK, D</td></tr>
+    <tr><td><kbd>H</kbd> / <kbd>S</kbd></td><td>Semisumador y sumador completo. Son bloques cerrados, dibujados como en los esquemas en cascada: los bits entran por abajo, el acarreo anterior por la derecha, la suma sale para arriba y el acarreo R por la izquierda</td></tr>
+    <tr><td>Biestables</td><td>Cambian de estado en el flanco de subida del reloj. Seleccioná uno y en el panel derecho tenés su tabla de verdad y su tabla de excitación; en el Custom las dos son editables</td></tr>
+    <tr><td><kbd>T</kbd></td><td>Tabla de verdad con la expresión simplificada</td></tr>
+    <tr><td><kbd>?</kbd></td><td>Esta ayuda</td></tr>
+    <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Cortar (Ctrl+X) también vale: el primer pegado vuelve al mismo lugar. Copiar y pegar lo seleccionado (con sus cables internos); cada pegado sale un poco más corrido</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar</td></tr>
+    <tr><td>Flechas</td><td>Mover un paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
+    <tr><td><kbd>R</kbd></td><td>Gira la compuerta seleccionada 90° (con <kbd>Shift</kbd>, al revés). Los cables siguen atados a la misma pata y se rehacen solos</td></tr>
+    <tr><td>Pantalla táctil</td><td>Un dedo en el fondo mueve la hoja; un dedo sobre un elemento lo
+      selecciona y lo arrastra; dos dedos hacen zoom</td></tr>
+    <tr><td>Rueda / Espacio / <kbd>Ctrl</kbd>+clic</td><td>Mueve el lienzo (con el botón del medio, la barra espaciadora o <kbd>Ctrl</kbd> + clic izquierdo arrastrando) · <kbd>Ctrl</kbd>+rueda hace zoom · <kbd>Shift</kbd>+rueda a lo ancho</td></tr>
+  </table>
+  <div style="margin-top:16px;text-align:right"><button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button></div>
+</div></div>
+
+<!-- @incluir comun/ventana-abrir.html titulo="Abrir circuito" cosa="circuito" nodos="nodes" conexiones="wires" -->
+
+<script>
+// @incluir comun/lienzo.js
+// @incluir simulador/herramienta.js
+// @incluir comun/ids.js
+// @incluir comun/documento.js
+// @incluir comun/historial.js
+// @incluir comun/portapapeles.js
+// @incluir comun/vista.js
+// @incluir comun/panel.js
+// @incluir comun/recuadros.js
+// @incluir simulador/tipos.js
+// @incluir comun/colores.js
+// @incluir comun/hoja.js
+// @incluir comun/ortogonal.js
+// @incluir simulador/modelo.js
+// @incluir simulador/geometria.js
+// @incluir simulador/logica.js
+// @incluir simulador/dibujo.js
+// @incluir simulador/panel.js
+// @incluir simulador/exportar.js
+// @incluir comun/doble-clic.js
+// @incluir comun/tactil.js
+// @incluir simulador/interaccion.js
+// @incluir simulador/paleta.js
+// @incluir simulador/comandos.js
+// @incluir simulador/tabla.js
+// @incluir comun/teclado.js
+// @incluir comun/barra.js
+// @incluir simulador/barra.js
+// @incluir simulador/ejemplos.js
+// @incluir comun/autoguardado.js
+// @incluir simulador/arranque.js
+</script>
+</body>
+</html>

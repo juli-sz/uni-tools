@@ -1,0 +1,15 @@
+/* ---------- colores en el panel: muestras, paleta propia ---------- */
+.swatch{width:26px;height:22px;padding:0;border:1px solid var(--line);border-radius:5px;
+  background:none;cursor:pointer;flex:none}
+.swatch::-webkit-color-swatch-wrapper{padding:2px}
+.swatch::-webkit-color-swatch{border:none;border-radius:3px}
+.cgrid{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center}
+.cgrid label{font-size:11.5px;color:var(--ink-2)}
+/* paleta: un tirito de colores a mano, más el selector libre al final */
+.paleta{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.pcol{width:19px;height:19px;padding:0;border-radius:50%;cursor:pointer;flex:none;
+  border:1px solid rgba(18,24,31,.22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+.pcol:hover{transform:scale(1.12)}
+.pcol.sel{box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px var(--accent)}
+.pcol.grande{width:24px;height:24px}
+.pcol.quitable:hover{border-color:var(--warn);transform:scale(1.12)}

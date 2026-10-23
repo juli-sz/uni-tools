@@ -1,0 +1,2 @@
+/* ======================= arranque ======================= */
+arrancar(() => cargarEjemplo("full"));

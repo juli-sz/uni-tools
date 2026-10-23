@@ -1,0 +1,93 @@
+/* ======================= circuitos lógicos ======================= */
+:root{--on:#12a150;--on-soft:#e4f6ec;--off:#9aa5ae}
+button,select,input{font-family:var(--ui);font-size:12px;color:var(--ink)}
+/* la paleta tiene grupos plegables y puede ser más alta que la hoja */
+#palette{gap:2px;max-height:calc(100% - 24px);overflow:auto}
+#palette .sep{height:1px;background:var(--line-2);margin:4px 2px}
+.pgroup{width:180px;display:flex;align-items:center;gap:6px;background:transparent;border:0;
+  border-radius:7px;padding:7px 8px;cursor:pointer;font-family:var(--mono);font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:#93a0ae;text-align:left}
+.pgroup:hover{background:var(--line-2);color:var(--ink-2)}
+.pgroup .chev{width:13px;height:13px;flex:none;stroke:currentColor;stroke-width:2;fill:none;
+  transition:transform .15s}
+.pgroup.abierto .chev{transform:rotate(90deg)}
+.plist{display:flex;flex-direction:column;gap:2px;padding-bottom:4px}
+.ptool{width:166px;gap:10px;padding:5px 8px}
+.ptool svg{width:38px;height:24px;flex:none;overflow:visible}
+.ptool .glyph-body{fill:var(--paper);stroke:var(--ink);stroke-width:1.5}
+.ptool .glyph-wire{stroke:var(--ink);stroke-width:1.4;fill:none}
+#inspector{width:272px}
+.row label{width:78px}
+input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.empty{padding:24px 16px}
+/* panel de control */
+.io-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.io-name{font-family:var(--mono);font-size:12px;font-weight:600;width:56px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw{border:1px solid var(--line);border-radius:20px;width:44px;height:23px;position:relative;
+  cursor:pointer;background:var(--line-2);flex:none;transition:background .14s}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;
+  background:var(--paper);box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .14s}
+.sw.on{background:var(--c-activo,var(--on))}
+.sw.on::after{transform:translateX(21px)}
+.bit{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--off);width:16px;text-align:center}
+.bit.on{color:var(--c-activo,var(--on))}
+.lamp{width:14px;height:14px;border-radius:50%;background:var(--line-2);border:1.5px solid var(--line);flex:none}
+.lamp.on{background:var(--c-activo,var(--on));border-color:var(--c-activo,var(--on));box-shadow:0 0 0 3px var(--on-soft)}
+table.tt{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+table.tt th{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#93a0ae;
+  padding:4px 2px;border-bottom:1px solid var(--line);font-weight:600}
+table.tt td{padding:3px 2px;text-align:center;border-bottom:1px solid var(--line-2);color:var(--ink-2)}
+table.tt td.sep,table.tt th.sep{border-left:1px solid var(--line)}
+table.tt td.v1{color:var(--on);font-weight:600}
+table.tt td.edit{cursor:pointer;color:var(--ink);font-weight:600}
+table.tt td.edit:hover{background:var(--accent-soft);color:var(--accent)}
+#status .warn{color:var(--warn)}
+/* ---------- tabla de verdad y ayuda ---------- */
+.modal{max-width:640px;max-height:82vh}
+.modal table{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)}
+.modal th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#93a0ae;
+  padding:6px 8px;border-bottom:1px solid var(--line);text-align:center}
+.modal td{padding:4px 8px;text-align:center;border-bottom:1px solid var(--line-2)}
+.modal tr.now{background:var(--accent-soft)}
+.modal td.v1{color:var(--on);font-weight:600}
+.modal td.sep{border-left:1px solid var(--line)}
+.modal th.sep{border-left:1px solid var(--line)}
+.expr{font-family:var(--mono);font-size:12.5px;background:var(--line-2);border:1px solid var(--line);
+  border-radius:8px;padding:9px 11px;margin-bottom:6px;overflow-x:auto;white-space:nowrap}
+.expr b{color:var(--accent)}
+.help td{padding:5px 0;border-bottom:1px solid var(--line-2);vertical-align:top;text-align:left;font-family:var(--ui)}
+.help td:first-child{width:150px;white-space:nowrap}
+.modal summary:hover{color:var(--ink)}
+/* dibujo
+   Los colores salen de variables CSS puestas en el <svg>. Una compuerta o un cable
+   con color propio redefine la variable en su propio <g> y sus hijos la heredan. */
+svg#canvas{
+  --c-relleno:#ffffff; --c-borde:#101418; --c-texto:#101418;
+  --c-cable:#9aa5ae; --c-activo:#12a150; --c-fondo:#ffffff;
+}
+.g-body{fill:var(--c-relleno);stroke:var(--c-borde);stroke-width:1.7;stroke-linejoin:round}
+.g-stub{stroke:var(--c-borde);stroke-width:1.5;fill:none}
+.g-label{font-family:var(--draw);fill:var(--c-texto);text-anchor:middle;dominant-baseline:central;
+  pointer-events:none;user-select:none}
+.wire{fill:none;stroke:var(--c-cable);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.wire.hi{stroke:var(--c-activo);stroke-width:2.2}
+.wire.sel{stroke:var(--accent);stroke-dasharray:6 3}
+.wire-hit{stroke:transparent;stroke-width:14;fill:none;cursor:pointer}
+.dot{fill:var(--c-cable)}.dot.hi{fill:var(--c-activo)}
+.m-label{font-family:var(--draw);fill:var(--c-borde);text-anchor:start;dominant-baseline:central;
+  pointer-events:none;user-select:none}
+.sel .g-body{stroke:var(--accent)}
+.pin{fill:var(--paper);stroke:var(--accent);stroke-width:1.4;cursor:crosshair}
+.pin:hover{fill:var(--accent)}
+.pin.taken{stroke:var(--c-cable)}
+.pin-hit{fill:transparent;stroke:none;cursor:crosshair}
+.led-off{fill:#eef1f4;stroke:var(--c-borde);stroke-width:1.7}
+.led-on{fill:var(--c-activo);stroke:var(--c-borde);stroke-width:1.7}
+.sw-track{fill:#eef1f4;stroke:var(--c-borde);stroke-width:1.7}
+.sw-track.on{fill:var(--on-soft)}
+.sw-knob{fill:var(--c-relleno);stroke:var(--c-borde);stroke-width:1.7}
+.sw-knob.on{fill:var(--c-activo);stroke:var(--c-borde)}
+/* @incluir comun/recuadros.css */
+/* @incluir comun/hoja.css */
+/* @incluir comun/colores.css */

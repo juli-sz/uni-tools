@@ -1,0 +1,33 @@
+# --- Pruebas (tests/): dependencias y resultados ---
+node_modules/
+tests/test-results/
+tests/playwright-report/
+# (si alguien corre Playwright desde la raíz por error, deja estas carpetas)
+/test-results/
+/playwright-report/
+
+# --- Claude Code: configuración local de cada máquina (la skill sí se versiona) ---
+.claude/launch.json
+.claude/settings.local.json
+
+# --- Basura al descomprimir o pasar archivos entre sistemas ---
+# (unzip en Linux crea "diagrama-se#U00f1ales.html" cuando el zip trae mal la ñ)
+*#U00*
+*.zip
+*.patch
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+
+# --- Editores ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Registros y temporales ---
+*.log
+*.tmp

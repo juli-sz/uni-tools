@@ -1,0 +1,15 @@
+# Estilo de archivo para cualquier editor (https://editorconfig.org).
+# Los archivos del sitio usan LF y sangría de dos espacios (ver CLAUDE.md).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+
+# En Markdown, dos espacios al final de una línea son un salto de línea: no se tocan.
+[*.md]
+trim_trailing_whitespace = false

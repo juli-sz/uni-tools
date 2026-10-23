@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Archivo armado por src/construir.js: no se edita a mano. Las fuentes están en src/senales/ y src/comun/. -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -7,6 +8,10 @@
 <meta name="description" content="Nodos, transmitancias y la regla de Mason: trayectorias, lazos, cofactores y función de transferencia">
 <link rel="icon" type="image/png" href="uni-tools-marca.png">
 <style>
+/* ======================= estilos comunes =======================
+   La carcasa de las tres herramientas: barra de arriba, hoja, paleta flotante, panel,
+   barra de estado, avisos y ventanas. Lo que cambia de una a otra (anchos, colores
+   del dibujo) va en el estilos.css de cada una, que viene después y manda. */
 :root{
   --ink:#12181f;
   --ink-2:#3d4b5a;
@@ -17,7 +22,6 @@
   --accent:#0d5bd6;
   --accent-soft:#e3edff;
   --warn:#c2410c;
-  --ok:#166534;
   --ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
   --draw:Arial,Helvetica,sans-serif;
@@ -30,10 +34,13 @@ body{font-family:var(--ui);color:var(--ink);background:var(--shell);
 header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;
   background:var(--paper);border-bottom:1px solid var(--line);z-index:5}
 .brand{display:flex;align-items:baseline;gap:8px;margin-right:4px}
+a.btn{text-decoration:none;color:inherit;font-size:12px;line-height:normal}
+#b-inicio{flex:none}
 .brand b{font-size:14px;letter-spacing:-.01em}
 .brand span{font-family:var(--mono);font-size:10px;color:#8a97a5;letter-spacing:.08em;text-transform:uppercase}
 .group{display:flex;align-items:center;gap:4px;padding-right:12px;border-right:1px solid var(--line-2)}
 .group:last-child{border-right:0}
+/* los grupos se pliegan con un clic en su nombre */
 .glab{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;text-transform:uppercase;
   margin-right:2px;cursor:pointer;user-select:none;transition:color .15s}
 .glab:hover{color:var(--ink)}
@@ -41,7 +48,6 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;
   transition:transform .2s;margin-left:4px}
 .group.collapsed .glab::after{transform:rotate(-90deg)}
 .group.collapsed > *:not(.glab){display:none !important}
-button,select,input[type=text],input[type=number]{font-family:var(--ui);font-size:12px;color:var(--ink)}
 .btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 9px;cursor:pointer;
   display:inline-flex;align-items:center;gap:5px;line-height:1;white-space:nowrap;
   transition:background .12s,border-color .12s}
@@ -68,21 +74,21 @@ button,select,input[type=text],input[type=number]{font-family:var(--ui);font-siz
 /* ---------- estructura ---------- */
 main{flex:1;display:flex;min-height:0}
 #stage{flex:1;position:relative;background:var(--paper);overflow:hidden}
-svg#canvas{width:100%;height:100%;display:block;touch-action:none}
-svg#canvas.mode-connect{cursor:crosshair}
+svg#canvas{width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
 svg#canvas.panning{cursor:grabbing}
+/* paleta flotante para insertar */
 #palette{position:absolute;top:12px;left:12px;background:var(--paper);border:1px solid var(--line);
   border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:4px;
   box-shadow:0 6px 24px rgba(18,24,31,.08)}
 #palette .ptitle{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;padding:2px 4px 4px}
-.ptool{width:172px;display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;
-  border-radius:7px;padding:6px 8px;cursor:pointer;text-align:left}
+.ptool{display:flex;align-items:center;border:1px solid transparent;background:transparent;
+  border-radius:7px;cursor:pointer;text-align:left}
 .ptool:hover{background:var(--line-2)}
 .ptool.on{background:var(--accent-soft);border-color:#b9d2ff}
-.ptool svg{width:34px;height:22px;flex:none;overflow:visible;stroke:var(--ink);stroke-width:1.4;fill:none}
 .ptool span{font-size:12px}
 .ptool kbd{margin-left:auto;font-family:var(--mono);font-size:10px;color:#93a0ae}
-#inspector{width:280px;flex:none;background:var(--paper);border-left:1px solid var(--line);
+/* panel derecho */
+#inspector{flex:none;background:var(--paper);border-left:1px solid var(--line);
   display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
   transition:width .2s ease,min-width .2s ease,border-color .2s ease}
 #inspector.collapsed{width:0;min-width:0;border-left-color:transparent}
@@ -91,34 +97,65 @@ svg#canvas.panning{cursor:grabbing}
   text-transform:uppercase;color:#93a0ae;font-weight:600}
 .row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .row:last-child{margin-bottom:0}
-.row label{font-size:11.5px;color:var(--ink-2);width:76px;flex:none}
+.row label{font-size:11.5px;color:var(--ink-2);flex:none}
 .row .fill{flex:1;min-width:0}
 input[type=text],input[type=number],select{width:100%;border:1px solid var(--line);border-radius:6px;
   padding:5px 7px;background:var(--paper)}
-input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
-.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
 .hint{font-size:11px;color:#8a97a5;line-height:1.5}
 .empty{padding:26px 16px;text-align:center;color:#93a0ae;font-size:12px;line-height:1.6}
 .iconbar{display:flex;flex-wrap:wrap;gap:4px}
 kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line);
   border-bottom-width:2px;border-radius:4px;padding:1px 4px;font-size:10px}
-/* ---------- barra de estado ---------- */
+/* ---------- barra de estado y avisos ---------- */
 #status{display:flex;align-items:center;gap:16px;padding:5px 14px;background:var(--paper);
   border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:#8a97a5}
 #status .k{color:var(--ink-2)}
-#status .warn{color:var(--warn)}
 #toast{position:absolute;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);
-  background:var(--ink);color:#fff;font-size:12px;padding:8px 14px;border-radius:8px;
+  background:var(--ink);color:#fff;font-size:12px;padding:8px 10px 8px 14px;border-radius:8px;
+  display:flex;align-items:center;gap:8px;
   opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* la cruz: sólo se puede apretar mientras el aviso está a la vista */
+#toast .x{flex:none;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;
+  color:rgba(255,255,255,.75);font:inherit;line-height:1;cursor:pointer;pointer-events:none}
+#toast .x::before{content:"✕";font-size:11px}
+#toast.show .x{pointer-events:auto}
+#toast .x:hover{background:rgba(255,255,255,.16);color:#fff}
 /* ---------- ventanas ---------- */
 .overlay{position:fixed;inset:0;background:rgba(18,24,31,.45);display:none;align-items:center;
   justify-content:center;z-index:40;padding:20px}
 .overlay.show{display:flex}
-.modal{background:var(--paper);border-radius:12px;max-width:820px;width:100%;max-height:86vh;
+.modal{background:var(--paper);border-radius:12px;width:100%;
   overflow:auto;padding:22px 24px;box-shadow:0 20px 60px rgba(18,24,31,.3)}
 .modal h2{margin:0 0 4px;font-size:16px}
 .modal p.sub{margin:0 0 16px;color:#8a97a5;font-size:12px}
+textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
+  border-radius:8px;padding:8px;resize:vertical}
+/* elegir archivo para abrir */
+.filebox{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:10px;padding:16px}
+.filebox .nom{font-family:var(--mono);font-size:11.5px;color:#8a97a5;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal details{margin-top:16px}
+.modal summary{cursor:pointer;font-size:12px;color:var(--ink-2);user-select:none;padding:4px 0}
+.modal details textarea{margin-top:8px}
+/* ---------- dibujo: lo de la selección ---------- */
+.sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+.ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
+/* ======================= flujo de señales ======================= */
+:root{--ok:#166534}
+button,select,input[type=text],input[type=number]{font-family:var(--ui);font-size:12px;color:var(--ink)}
+svg#canvas.mode-connect{cursor:crosshair}
+.ptool{width:172px;gap:10px;padding:6px 8px}
+.ptool svg{width:34px;height:22px;flex:none;overflow:visible;stroke:var(--ink);stroke-width:1.4;fill:none}
+#inspector{width:280px}
+.row label{width:76px}
+input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+#status .warn{color:var(--warn)}
+/* ---------- ventana del análisis ---------- */
+.modal{max-width:820px;max-height:86vh}
+#ov-io .modal{max-width:560px}
 .modal h4{margin:20px 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
   text-transform:uppercase;color:#93a0ae}
 .modal h4:first-of-type{margin-top:6px}
@@ -136,18 +173,12 @@ kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line
   font-family:var(--mono);font-size:13px;overflow-x:auto}
 .caja.resultado{border-color:#b9d2ff;background:var(--accent-soft)}
 .nada{color:#8a97a5;font-size:12px;padding:4px 0}
+.aviso{color:var(--warn);font-size:12px;line-height:1.5;border:1px solid #f3c7ad;background:#fff4ec;
+  border-radius:8px;padding:8px 11px;margin-bottom:10px}
 /* vista previa del diagrama de bloques equivalente */
 .previo{border:1px solid var(--line);border-radius:10px;background:var(--paper);
   padding:10px;overflow-x:auto}
 .previo svg{display:block;max-width:100%;height:auto}
-textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
-  border-radius:8px;padding:8px;resize:vertical}
-.filebox{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:10px;padding:16px}
-.filebox .nom{font-family:var(--mono);font-size:11.5px;color:#8a97a5;min-width:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.modal details{margin-top:16px}
-.modal summary{cursor:pointer;font-size:12px;color:var(--ink-2);user-select:none;padding:4px 0}
-.modal details textarea{margin-top:8px}
 /* ---------- dibujo ---------- */
 svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff}
 .n-dot{fill:var(--c-nodo);stroke:none}
@@ -167,9 +198,6 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
 .sel .n-dot,.sel .n-io{fill:var(--accent);stroke:var(--accent)}
 .sel .r-linea{stroke:var(--accent)}
 .sel .r-punta{fill:var(--accent)}
-.sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
-.band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
-.ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
 .resalte .r-linea{stroke:var(--accent);stroke-width:3}
 .resalte .r-punta{fill:var(--accent)}
 </style>
@@ -177,6 +205,8 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
 <body>
 
 <header>
+  <a class="btn ghost" id="b-inicio" href="index.html" title="Volver al inicio (el diagrama queda guardado en este navegador)">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Inicio</a>
   <div class="brand"><b>Flujo de señales</b><span>mason</span></div>
 
   <div class="group collapsed">
@@ -192,6 +222,8 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
       <svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 010 10h-3"/></svg></button>
     <button class="btn ghost" id="b-redo" title="Rehacer (Ctrl+Y)">
       <svg viewBox="0 0 24 24"><path d="M15 14l4-4-4-4"/><path d="M19 10h-9a5 5 0 000 10h3"/></svg></button>
+    <button class="btn ghost" id="b-dup" title="Duplicar (Ctrl+D)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg><span>Duplicar</span> <kbd>Ctrl+D</kbd></button>
     <button class="btn ghost" id="b-del" title="Borrar (Supr)">
       <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg></button>
   </div>
@@ -278,6 +310,17 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
   <span><span class="k">Ramas</span> <span id="st-r">0</span></span>
   <span><span class="k">Selección</span> <span id="st-s">—</span></span>
   <span id="st-warn"></span>
+  <span style="display:flex; gap:8px; align-items:center; margin-left:8px; color:var(--ink-2);">
+    <span class="k">Atajos:</span>
+    <span><kbd>N</kbd> Nodo</span>
+    <span><kbd>C</kbd> Conectar</span>
+    <span><kbd>V</kbd> Selección</span>
+    <span><kbd>X</kbd> Múltiple</span>
+    <span><kbd>Ctrl+D</kbd> Duplicar</span>
+    <span><kbd>A</kbd> Análisis</span>
+    <span><kbd>Supr</kbd> Borrar</span>
+    <span><kbd>?</kbd> Ayuda</span>
+  </span>
   <span id="st-hint" style="margin-left:auto"></span>
 </div>
 
@@ -302,8 +345,10 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
     <tr><td><kbd>A</kbd></td><td>Análisis: ecuaciones, trayectorias, lazos, cofactores y función de transferencia</td></tr>
     <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Cortar (Ctrl+X) también vale: el primer pegado vuelve al mismo lugar. Copiar y pegar los nodos seleccionados (con las ramas que los unen); cada pegado sale un poco más corrido</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar los nodos seleccionados (con las ramas que los unen)</td></tr>
     <tr><td>Flechas</td><td>Mover un paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
-    <tr><td>Rueda / Espacio</td><td>Mueve la hoja · <kbd>Ctrl</kbd>+rueda hace zoom</td></tr>
+    <tr><td>Rueda / Espacio / <kbd>Ctrl</kbd>+clic</td><td>Mueve la hoja (con el botón del medio, la barra espaciadora o <kbd>Ctrl</kbd> + clic izquierdo arrastrando) · <kbd>Ctrl</kbd>+rueda hace zoom · <kbd>Shift</kbd>+rueda a lo ancho</td></tr>
     <tr><td>Pantalla táctil</td><td>Un dedo en el fondo mueve la hoja; un dedo sobre un nodo o una
       rama lo selecciona y lo arrastra; dos dedos hacen zoom</td></tr>
   </table>
@@ -312,10 +357,10 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
   </div>
 </div></div>
 
-<div class="overlay" id="ov-io"><div class="modal" style="max-width:560px">
+<div class="overlay" id="ov-io"><div class="modal">
   <h2>Abrir diagrama</h2>
   <p class="sub">Un <b>.json</b> guardado desde acá, o un <b>.svg</b> exportado desde acá:
-    el SVG se lleva los datos del diagrama adentro.</p>
+    el SVG se lleva los datos del diagrama adentro, así que se puede volver a abrir y editar.</p>
   <div class="filebox">
     <button class="btn on" id="io-file-btn">Elegir archivo…</button>
     <span class="nom" id="io-file-nom">Ningún archivo elegido</span>
@@ -333,9 +378,86 @@ svg#canvas{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#ffffff
 
 <script>
 "use strict";
+/* ======================= lienzo =======================
+   Lo primero de las tres herramientas: el <svg> de la hoja, la vista que se mueve
+   y se agranda adentro, y las utilidades de dibujo que usa todo lo demás. */
 const NS = "http://www.w3.org/2000/svg";
 const $ = (s) => document.querySelector(s);
 const svg = $("#canvas"), viewport = $("#viewport");
+
+/* Firefox: arrastrar sobre el SVG le arma al navegador una selección de texto y, al volver
+   a apretar sobre ella, empieza un "arrastrar y soltar" nativo que cancela los eventos del
+   puntero: la hoja queda trabada (ni Ctrl+clic ni la banda andan) hasta hacer clic en otro
+   elemento. Se evita de raíz: el lienzo no es seleccionable ni arrastrable por el navegador,
+   y si ya quedó una selección, se limpia al apretar. (El campo del doble clic es un <input>
+   fuera del SVG y sigue siendo seleccionable.) */
+svg.addEventListener("dragstart", ev => ev.preventDefault());
+svg.addEventListener("selectstart", ev => ev.preventDefault());
+svg.addEventListener("pointerdown", () => {
+  const s = getSelection();
+  if (s && s.rangeCount && !s.isCollapsed) s.removeAllRanges();
+}, true);
+
+/* Capturar el puntero es una ayuda para no perder el gesto, no un requisito: puede
+   fallar (un dedo que ya se levantó, eventos sintéticos) y el gesto tiene que seguir
+   igual, así que el error se ignora. */
+function capturarPuntero(ev) {
+  try { svg.setPointerCapture(ev.pointerId); } catch (e) {}
+}
+
+/* Crea un elemento SVG con sus atributos y, si se le pasa, lo cuelga del padre */
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+/* Texto para meter adentro de HTML (también en atributos entre comillas dobles) */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+/* El aviso se puede cerrar con su cruz y se va solo pasado un rato: más tiempo
+   cuanto más haya que leer (y un tope), que un mensaje largo no da para dos segundos */
+function ocultarToast() {
+  clearTimeout(toast._t);
+  const t = $("#toast");
+  if (t) t.classList.remove("show");
+}
+function toast(m, ms) {
+  const t = $("#toast");
+  if (!t.firstChild) {                             // el texto y la cruz se arman una sola vez
+    const s = document.createElement("span"); s.className = "txt"; t.appendChild(s);
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "x"; x.title = "Cerrar";
+    x.setAttribute("aria-label", "Cerrar aviso");
+    x.onclick = ocultarToast;
+    t.appendChild(x);
+  }
+  t.firstChild.textContent = m;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(ocultarToast, ms || Math.min(7000, 1700 + 55 * String(m).length));
+}
+/* ======================= diagrama de flujo de señales =======================
+   Lo que el código común (src/comun) necesita saber de esta herramienta. */
+const HERRAMIENTA = {
+  nombre: "Flujo de señales",                      // en el aviso de «Inicio»
+  titulo: "Diagramas de flujo de señales",         // título de la pestaña, después del nombre del archivo
+  clave: "senales",                                // autoguardado: uni-tools-autoguardado-senales
+  // cómo se llaman las colecciones en S (y en el JSON)
+  nodos: "nodos", conexiones: "ramas", selConexiones: "selR",
+  extremos: (r) => [r.de, r.a],                    // los dos nodos que une una rama
+  fondoPNG: () => "#fff",
+  textos: {
+    elementos: "nodos",                            // "Copiados 3 nodos"
+    vacio: "El diagrama está vacío",
+    guardado: "Diagrama guardado",
+    cargado: "Diagrama cargado",
+    noEsDoc: "Ese archivo no tiene un diagrama de flujo adentro",
+    svgSinDatos: "Ese SVG no trae los datos del diagrama: se exportó con otra herramienta",
+  },
+};
 const gRamas = $("#gRamas"), gNodos = $("#gNodos"), gOv = $("#gOverlay");
 
 /* ======================= modelo =======================
@@ -350,12 +472,14 @@ let S = {
 };
 const NOMBRE_DEF = "flujo-de-senales";
 /* ---------- identificadores ----------
-   Un id repetido es veneno: getNodo() devuelve siempre el primero, así que el
-   nodo nuevo termina moviendo o borrando al viejo. Por eso el contador salta los
-   que ya estén ocupados, y al abrir un archivo arranca del número más alto en
-   uso (contar los elementos no alcanza: al borrar los números se saltean). */
+   Un id repetido es veneno: buscar por id devuelve siempre el primero, así que el
+   elemento nuevo termina moviendo, duplicando o borrando al viejo. Por eso el
+   contador salta los que ya estén ocupados, y al abrir un archivo arranca del
+   número más alto en uso (contar los elementos no alcanza: al borrar y duplicar
+   los números se saltean y quedan ids muy por encima de la cantidad). */
 let uidc = 1;
-const idEnUso = (id) => S.nodos.some(n => n.id === id) || S.ramas.some(r => r.id === id);
+const idEnUso = (id) => S[HERRAMIENTA.nodos].some(n => n.id === id) ||
+                        S[HERRAMIENTA.conexiones].some(c => c.id === id);
 const uid = (p) => { let id; do { id = p + (uidc++); } while (idEnUso(id)); return id; };
 function proximoUid(...listas) {
   let max = 0;
@@ -366,24 +490,303 @@ function proximoUid(...listas) {
   return max + 1;
 }
 /* Un archivo guardado mientras el contador estaba mal puede traer ids repetidos.
-   El primero se queda con el suyo, que es a quien ya apuntaban las ramas. */
+   El primero se queda con el suyo, que es a quien ya apuntaban las conexiones. */
 function sanearIds(lista, prefijo, vistos) {
   let arreglados = 0;
   for (const o of lista) {
-    if (!o.id || vistos.has(o.id)) { o.id = uid(prefijo); arreglados++; }
+    // un id raro (que no sea texto simple) se renumera: también se usa adentro del HTML
+    if (typeof o.id !== "string" || !/^[A-Za-z0-9_-]+$/.test(o.id) || vistos.has(o.id)) { o.id = uid(prefijo); arreglados++; }
     vistos.add(o.id);
   }
   return arreglados;
 }
-const getNodo = (id) => S.nodos.find(n => n.id === id);
-const getRama = (id) => S.ramas.find(r => r.id === id);
-const R_NODO = 6;                       // radio del puntito del nodo
+/* El elemento (nodo, bloque, compuerta) con ese id, sin importar cómo se llame la colección */
+const buscarNodo = (id) => S[HERRAMIENTA.nodos].find(n => n.id === id);
+/* ======================= el documento: nombre, abrir, guardar y exportar =======================
+   Lo que se guarda en el JSON y viaja adentro del SVG lo arma docDatos() de cada
+   herramienta; lo que llega de un archivo lo valida su cargarDoc(). Esto es el resto,
+   que es igual en las tres. */
 
+/* Versión del formato del documento: viaja en el JSON y adentro del SVG para que, si
+   cambia la forma de guardar, se sepa con qué se está tratando (los archivos viejos
+   no la traen). Al subirla, migrar en cargarDoc() según la que venga. */
+const VERSION_DOC = 1;
+
+/* Un archivo mal armado (a mano, truncado, de otra versión) no tiene que tumbar la
+   herramienta: se descarta lo que no se puede dibujar y se completa lo que falte,
+   sin tocar lo que ya está bien. */
+const esObj = (o) => !!o && typeof o === "object" && !Array.isArray(o);
+const num = (v, def) => (typeof v === "number" && isFinite(v)) ? v : def;
+
+/* Un nombre de archivo que no incomode a ningún sistema operativo */
 function limpiarNombre(s) {
   const t = String(s || "").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 60);
   return t || NOMBRE_DEF;
 }
 const nombreArchivo = (ext) => limpiarNombre(S.nombre) + "." + ext;
+
+/* Los SVG exportados llevan el documento adentro, en <metadata>, así que se
+   pueden volver a abrir. Los exportados antes de esto no lo tienen. */
+function datosDeSVG(txt) {
+  const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+  if (doc.querySelector("parsererror")) throw new Error("no es un SVG válido");
+  const m = doc.querySelector("metadata#uni-tools-datos");
+  if (!m || !m.textContent.trim()) throw new Error("ese SVG no trae los datos adentro");
+  return JSON.parse(m.textContent);
+}
+function abrirTexto(txt, nombreDelArchivo) {
+  const t = String(txt || "").trim();
+  if (!t) return toast("No hay nada para abrir");
+  let d;
+  try {
+    // lo que no empieza como JSON ni como SVG ni se intenta leer (Firefox se queja en la consola)
+    if (t[0] !== "{" && t[0] !== "<") throw new Error("no es JSON ni SVG");
+    d = t[0] === "{" ? JSON.parse(t) : datosDeSVG(t);
+  } catch (e) {
+    return toast(/metadata|datos/.test(e.message) ? HERRAMIENTA.textos.svgSinDatos : "Ese archivo no se pudo leer");
+  }
+  if (!d || !Array.isArray(d[HERRAMIENTA.nodos])) return toast(HERRAMIENTA.textos.noEsDoc);
+  cargarDoc(d, nombreDelArchivo && nombreDelArchivo.replace(/\.(json|svg)$/i, ""));
+  commit(); fit();
+  $("#ov-io").classList.remove("show");
+  toast(HERRAMIENTA.textos.cargado);
+}
+
+function download(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+/* El PNG sale de dibujar el SVG en un canvas, al triple de tamaño */
+function descargarPNG(s, W, H, fondo, nombre) {
+  const img = new Image();
+  img.onload = () => {
+    const sc = 3, c = document.createElement("canvas");
+    c.width = W * sc; c.height = H * sc;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = fondo; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(bl => { download(nombre, bl); toast("PNG descargado (3×)"); });
+  };
+  img.onerror = () => toast("No se pudo generar el PNG");
+  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s))));
+}
+
+/* ---- armado del SVG exportado ----
+   El esqueleto: tamaño, recorte (caja b con margen m) y el documento adentro. */
+function svgExportado(b, m, W, H) {
+  const s = document.createElementNS(NS, "svg");
+  s.setAttribute("width", W); s.setAttribute("height", H);   // el xmlns lo pone el serializador
+  s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
+  // el documento viaja adentro del SVG para poder volver a abrirlo desde acá
+  const meta = document.createElementNS(NS, "metadata");
+  meta.setAttribute("id", "uni-tools-datos");
+  meta.textContent = JSON.stringify(docDatos());
+  s.appendChild(meta);
+  return s;
+}
+function fondoExportado(s, b, m, W, H, color) {
+  const bg = document.createElementNS(NS, "rect");
+  bg.setAttribute("x", b.l - m); bg.setAttribute("y", b.t - m);
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", color);
+  s.appendChild(bg);
+}
+/* Copias de las capas del dibujo tal como se ven sin nada seleccionado */
+function capasSinSeleccion(capas) {
+  const sel = S.sel, selC = S[HERRAMIENTA.selConexiones];
+  S.sel = []; S[HERRAMIENTA.selConexiones] = []; render();
+  const copias = capas.map(c => c.cloneNode(true));
+  S.sel = sel; S[HERRAMIENTA.selConexiones] = selC; render();
+  return copias;
+}
+
+/* ---- botones de Archivo y ventana de abrir ---- */
+$("#b-svg").onclick = () => {
+  if (!S[HERRAMIENTA.nodos].length) return toast(HERRAMIENTA.textos.vacio);
+  download(nombreArchivo("svg"), new Blob([new XMLSerializer().serializeToString(buildExportSVG().svg)], { type: "image/svg+xml" }));
+  toast("SVG descargado");
+};
+$("#b-png").onclick = () => {
+  if (!S[HERRAMIENTA.nodos].length) return toast(HERRAMIENTA.textos.vacio);
+  const { svg: s, W, H } = buildExportSVG();
+  descargarPNG(s, W, H, HERRAMIENTA.fondoPNG(), nombreArchivo("png"));
+};
+$("#b-save").onclick = () => {
+  download(nombreArchivo("json"), new Blob([JSON.stringify(docDatos(), null, 1)], { type: "application/json" }));
+  toast(HERRAMIENTA.textos.guardado);
+};
+$("#b-open").onclick = () => {
+  $("#io-text").value = ""; $("#io-file").value = "";
+  $("#io-file-nom").textContent = "Ningún archivo elegido";
+  $("#ov-io").classList.add("show");
+};
+$("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
+$("#io-file-btn").onclick = () => $("#io-file").click();
+$("#io-file").onchange = (ev) => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  $("#io-file-nom").textContent = f.name;
+  const r = new FileReader();
+  r.onload = () => abrirTexto(r.result, f.name);
+  r.onerror = () => toast("No se pudo leer el archivo");
+  r.readAsText(f);
+};
+$("#io-ok").onclick = () => abrirTexto($("#io-text").value);
+// nombre del archivo: se usa para el SVG, el PNG y el JSON
+$("#b-nombre").addEventListener("input", () => {
+  S.nombre = $("#b-nombre").value;
+  document.title = limpiarNombre(S.nombre) + " · " + HERRAMIENTA.titulo;
+});
+$("#b-nombre").addEventListener("change", () => {
+  S.nombre = limpiarNombre($("#b-nombre").value);
+  $("#b-nombre").value = S.nombre; commit();
+});
+$("#b-nombre").addEventListener("keydown", ev => ev.stopPropagation());
+/* ======================= historial =======================
+   snapshot() es el documento entero (docDatos() de la herramienta, más el contador de
+   ids) y commit() lo apila sólo si cambió. La regla: cambiar el estado y después
+   llamar a commit() y render(). Lo que no esté en docDatos() no sobrevive un deshacer.
+   Cómo se vuelve a una foto lo decide restore() de cada herramienta. */
+let undoStack = [], redoStack = [], lastSnap = null;
+const snapshot = () => JSON.stringify(Object.assign(docDatos(), { uidc }));
+function commit() {
+  const s = snapshot();
+  if (s === lastSnap) return;
+  if (lastSnap !== null) { undoStack.push(lastSnap); if (undoStack.length > 120) undoStack.shift(); }
+  redoStack = []; lastSnap = s;
+  autoguardar();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  const s = undoStack.pop(); restore(s); lastSnap = s; render();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  const s = redoStack.pop(); restore(s); lastSnap = s; render();
+}
+/* ======================= borrar, copiar, cortar, pegar y duplicar =======================
+   Lo copiado es una foto de los elementos seleccionados y de las conexiones que unen
+   dos de ellos (con clones profundos: un cable tiene que conservar todo, patas y
+   colores). Cada pegado la inserta con ids nuevos, corrida un poco más que el anterior
+   para que no queden encimadas. Duplicar (Ctrl+D) es copiar y pegar en un solo paso, sin
+   tocar lo copiado. Cómo se inserta la foto (ids nuevos, nombres que no choquen) lo
+   decide insertar() de cada herramienta. */
+let portapapeles = null, pegados = 0;
+const clonar = (o) => JSON.parse(JSON.stringify(o));
+function borrar() {
+  const K = HERRAMIENTA, ids = new Set(S.sel), selC = S[K.selConexiones];
+  S[K.nodos] = S[K.nodos].filter(n => !ids.has(n.id));
+  S[K.conexiones] = S[K.conexiones].filter(c => !K.extremos(c).some(id => ids.has(id)) && !selC.includes(c.id));
+  S.sel = []; S[K.selConexiones] = [];
+}
+function tomarSeleccion() {
+  const K = HERRAMIENTA, ids = new Set(S.sel);
+  return { [K.nodos]: S[K.nodos].filter(n => ids.has(n.id)).map(clonar),
+           [K.conexiones]: S[K.conexiones].filter(c => K.extremos(c).every(id => ids.has(id))).map(clonar) };
+}
+function duplicar() {
+  if (!S.sel.length) { toast("Elegí algo para duplicar"); return; }
+  insertar(tomarSeleccion(), S.grid * 2);
+  commit(); render();
+}
+/* Cortar (Ctrl+X): copia y borra. El primer pegado después de cortar vuelve al mismo lugar;
+   los siguientes se van corriendo como siempre. Sólo se corta lo que se copia (la selección
+   y lo que la une por dentro): una conexión suelta seleccionada aparte no se borra. */
+function cortarSel() {
+  if (!S.sel.length) { toast("Elegí algo para cortar"); return; }
+  portapapeles = tomarSeleccion(); pegados = -1;
+  S[HERRAMIENTA.selConexiones] = []; borrar(); commit(); render();
+  const k = portapapeles[HERRAMIENTA.nodos].length;
+  toast(k === 1 ? "Cortado" : "Cortados " + k + " " + HERRAMIENTA.textos.elementos);
+}
+function copiarSel() {
+  if (!S.sel.length) { toast("Elegí algo para copiar"); return; }
+  portapapeles = tomarSeleccion(); pegados = 0;
+  const k = portapapeles[HERRAMIENTA.nodos].length;
+  toast(k === 1 ? "Copiado" : "Copiados " + k + " " + HERRAMIENTA.textos.elementos);
+}
+function pegarSel() {
+  if (!portapapeles) { toast("No hay nada copiado"); return; }
+  insertar(portapapeles, S.grid * 2 * ++pegados);
+  commit(); render();
+}
+/* ======================= vista: mover la hoja y hacer zoom ======================= */
+let drag = null, spaceDown = false;
+function toWorld(ev) {
+  const r = svg.getBoundingClientRect();
+  return { x: (ev.clientX - r.left - S.pan.x) / S.zoom, y: (ev.clientY - r.top - S.pan.y) / S.zoom };
+}
+const snapV = (v) => S.snap ? Math.round(v / S.grid) * S.grid : Math.round(v);
+/* Mover la hoja (sin cambiar el zoom) no cambia nada de lo dibujado: alcanza con correr la vista.
+   Redibujar todo en cada movimiento del mouse re-ruteaba todas las flechas y con diagramas
+   grandes se trababa. Si algo dibujado pasara a depender de S.pan, hay que redibujarlo acá. */
+function moverVista() {
+  viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
+}
+/* Encuadra la caja b (l, t, r, b en coordenadas de la hoja) dejando un margen en pantalla.
+   La paleta flota arriba a la izquierda: si queda lugar, lo dibujado se acomoda a su derecha
+   para que no tape nada (en una pantalla angosta no alcanza y se usa la hoja entera). */
+function encuadrar(b, margen, zoomMax) {
+  const r = svg.getBoundingClientRect(), p = $("#palette").getBoundingClientRect();
+  const izq = p.width && r.width - (p.right - r.left) > 500 ? p.right - r.left : 0;
+  const ancho = r.width - izq;
+  S.zoom = Math.max(.2, Math.min((ancho - margen * 2) / Math.max(1, b.r - b.l),
+                                 (r.height - margen * 2) / Math.max(1, b.b - b.t), zoomMax));
+  S.pan.x = izq + (ancho - (b.r - b.l) * S.zoom) / 2 - b.l * S.zoom;
+  S.pan.y = (r.height - (b.b - b.t) * S.zoom) / 2 - b.t * S.zoom;
+  render();
+}
+/* La rueda mueve la hoja; el pellizco del trackpad llega como rueda con Ctrl apretado,
+   y eso es zoom (alrededor del puntero). */
+const instalarRueda = () => svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const r = svg.getBoundingClientRect();
+  if (ev.ctrlKey || ev.metaKey) {
+    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    const wx = (mx - S.pan.x) / S.zoom, wy = (my - S.pan.y) / S.zoom;
+    S.zoom = Math.min(4, Math.max(.2, S.zoom * Math.exp(-ev.deltaY * .0016)));
+    S.pan.x = mx - wx * S.zoom; S.pan.y = my - wy * S.zoom;
+  } else {
+    const f = ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? r.height : 1;   // líneas o páginas
+    let dx = ev.deltaX, dy = ev.deltaY;
+    if (ev.shiftKey && !dx) { dx = dy; dy = 0; }                             // shift: a lo ancho
+    S.pan.x -= dx * f;
+    S.pan.y -= dy * f;
+  }
+  if (ev.ctrlKey || ev.metaKey) render(); else moverVista();   // el zoom sí cambia tamaños
+}, { passive: false });
+$("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
+$("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
+$("#b-fit").onclick = () => fit();
+$("#b-gridshow").onclick = () => { S.showGrid = !S.showGrid; render(); };
+/* ======================= panel derecho: utilidades =======================
+   renderInspector() de cada herramienta arma el HTML del panel y wireInspector() lo
+   conecta con estas. Mientras se escribe en un campo, lock() evita que render()
+   rehaga el panel (y se pierda el foco). */
+let inspLock = false;
+function lock(fn) { inspLock = true; try { fn(); } finally { inspLock = false; } }
+/* Un campo que se aplica en vivo mientras se escribe y entra al historial al confirmarlo.
+   Con redibujar, además se rehace el panel al confirmar. */
+function enVivo(id, fn, redibujar) {
+  const e = document.getElementById(id); if (!e) return;
+  e.addEventListener("input", () => lock(() => { fn(e.value); render(); }));
+  e.addEventListener("change", () => { fn(e.value); commit(); if (redibujar) render(); });
+  e.addEventListener("keydown", ev => ev.stopPropagation());
+}
+/* Un botón del panel: hace lo suyo, lo guarda en el historial y redibuja */
+function alClic(id, fn) {
+  const e = document.getElementById(id);
+  if (e) e.onclick = () => { fn(); commit(); render(); };
+}
+/* Las opciones de un <select> a partir de una tabla { valor: "texto" } */
+const opciones = (tabla, val) => Object.keys(tabla).map(k =>
+  `<option value="${k}"${k === val ? " selected" : ""}>${tabla[k]}</option>`).join("");
+const getNodo = (id) => S.nodos.find(n => n.id === id);
+const getRama = (id) => S.ramas.find(r => r.id === id);
+const R_NODO = 6;                       // radio del puntito del nodo
 
 /* Los nodos se llaman a, b, d… en minúscula, porque las mayúsculas son las
    ganancias. Quedan afuera la g y la h, que son las funciones de transferencia,
@@ -435,8 +838,106 @@ function nodoDeSalida() {
   return S.nodos.length ? S.nodos[S.nodos.length - 1] : null;
 }
 
+/* ======================= el documento =======================
+   Lo que se guarda en el JSON, viaja adentro del SVG y entra al historial. */
+const docDatos = () => ({ version: VERSION_DOC, nombre: limpiarNombre(S.nombre), nodos: S.nodos, ramas: S.ramas });
+function restore(js) {
+  const d = JSON.parse(js);
+  S.nodos = d.nodos; S.ramas = d.ramas; uidc = d.uidc || uidc;
+  S.nombre = d.nombre || S.nombre;
+  S.sel = S.sel.filter(getNodo); S.selR = S.selR.filter(getRama);
+}
+/* Lo que llega de un archivo (o del autoguardado) se depura: se descarta lo que no se
+   puede dibujar y se completa lo que falte, sin tocar lo que ya está bien. */
+function depurarNodos(lista) {
+  return (Array.isArray(lista) ? lista : []).filter(esObj).map(n => {
+    n.x = num(n.x, 0); n.y = num(n.y, 0);
+    if (typeof n.nombre !== "string") n.nombre = n.nombre == null ? "" : String(n.nombre);
+    return n;
+  });
+}
+function depurarRamas(lista, nodos) {
+  const ids = new Set(nodos.map(n => n.id));
+  return (Array.isArray(lista) ? lista : []).filter(r => esObj(r) && ids.has(r.de) && ids.has(r.a))
+    .map(r => { r.curva = num(r.curva, 0); return r; });
+}
+function cargarDoc(d, desdeArchivo) {
+  S.nodos = depurarNodos(d.nodos); S.ramas = Array.isArray(d.ramas) ? d.ramas.filter(esObj) : [];
+  S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
+  uidc = proximoUid(S.nodos, S.ramas);
+  const vistos = new Set();
+  const repetidos = sanearIds(S.nodos, "n", vistos) + sanearIds(S.ramas, "r", vistos);
+  S.ramas = depurarRamas(S.ramas, S.nodos);          // ya con los ids definitivos de los nodos
+  if (repetidos) setTimeout(() => toast("Se renumeraron " + repetidos + " ids repetidos"), 60);
+  S.sel = []; S.selR = [];
+}
+/* Pegar y duplicar: mete la foto de tomarSeleccion() con ids nuevos, corrida desp */
+function insertar(cop, desp) {
+  const map = {}, nuevos = [];
+  cop.nodos.forEach(n => {
+    const c = clonar(n); c.id = uid("n"); map[n.id] = c.id; c.x += desp; c.y += desp;
+    S.nodos.push(c); nuevos.push(c.id);             // se agrega ya: proximoNombre mira lo que hay
+    // nombre y tipo se conservan si no chocan con otro nodo (p. ej. al pegar lo cortado): si no,
+    // nombre libre y nodo normal (entrada y salida hay una sola de cada una)
+    const otros = S.nodos.filter(o => o !== c);
+    if (otros.some(o => o.nombre === c.nombre)) c.nombre = proximoNombre();
+    if (c.tipo !== "normal" && otros.some(o => o.tipo === c.tipo)) c.tipo = "normal";
+  });
+  cop.ramas.forEach(r => {
+    const c = clonar(r); c.id = uid("r"); c.de = map[r.de]; c.a = map[r.a];
+    S.ramas.push(c);
+  });
+  S.sel = nuevos; S.selR = [];
+}
+/* ======================= texto con subíndices =======================
+   Parte el texto en trozos de línea y trozos de subíndice. El número pegado a una
+   letra baja solo —G1 se lee G₁— y el guión bajo sirve para forzarlo: H_ent, o
+   H_{lo que sea} si son varios caracteres. */
+const LETRA = /[A-Za-zÀ-ÖØ-öø-ÿ]/;
+function trozosDeTexto(s) {
+  const txt = String(s == null ? "" : s);
+  const trozos = [];
+  const empujar = (t, sub) => { if (t) trozos.push({ t, sub }); };
+  let suelto = "", i = 0;
+  while (i < txt.length) {
+    const forzado = txt[i] === "_" && /^_(?:\{([^}]*)\}|([A-Za-z0-9À-ÖØ-öø-ÿ]+))/.exec(txt.slice(i));
+    if (forzado) {
+      empujar(suelto, false); suelto = "";
+      empujar(forzado[1] !== undefined ? forzado[1] : forzado[2], true);
+      i += forzado[0].length;
+      continue;
+    }
+    if (/\d/.test(txt[i]) && LETRA.test(txt[i - 1] || "")) {
+      const nums = /^\d+/.exec(txt.slice(i))[0];
+      empujar(suelto, false); suelto = "";
+      empujar(nums, true);
+      i += nums.length;
+      continue;
+    }
+    suelto += txt[i++];
+  }
+  empujar(suelto, false);
+  return trozos;
+}
+function ponerTexto(t, s) {
+  t.textContent = "";
+  let abajo = false;
+  for (const p of trozosDeTexto(s)) {
+    const attrs = {};
+    if (p.sub !== abajo) { attrs.dy = p.sub ? 4 : -4; abajo = p.sub; }
+    if (p.sub) attrs["font-size"] = "72%";
+    const e = el("tspan", attrs, t);
+    e.textContent = p.t;
+  }
+}
+const anchoTexto = (s) => trozosDeTexto(s)
+  .reduce((a, p) => a + p.t.length * (p.sub ? 5.2 : 7.2), 0) + 10;
+/* Igual que esc(), pero además baja los subíndices. Va en el análisis: si ahí
+   se leen "a1" y "G1" en crudo se pierde de vista cuál es nodo y cuál ganancia.
+   Devuelve HTML, así que no sirve para meter en un atributo. */
+const conSub = (s) => trozosDeTexto(s)
+  .map(p => p.sub ? "<sub>" + esc(p.t) + "</sub>" : esc(p.t)).join("");
 /* ======================= geometría ======================= */
-const snapV = (v) => S.snap ? Math.round(v / S.grid) * S.grid : Math.round(v);
 function bboxAll() {
   if (!S.nodos.length) return { l: 0, t: 0, r: 400, b: 300 };
   let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
@@ -548,58 +1049,7 @@ function ramaCerca(w) {                        // la rama más cercana al punter
   }
   return best;
 }
-
 /* ======================= dibujo ======================= */
-function el(tag, attrs, parent) {
-  const e = document.createElementNS(NS, tag);
-  for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== "") e.setAttribute(k, attrs[k]);
-  if (parent) parent.appendChild(e);
-  return e;
-}
-/* "x_1" se dibuja con el 1 como subíndice */
-/* Parte el texto en trozos de línea y trozos de subíndice. El número pegado a una
-   letra baja solo —G1 se lee G₁— y el guión bajo sirve para forzarlo: H_ent, o
-   H_{lo que sea} si son varios caracteres. */
-const LETRA = /[A-Za-zÀ-ÖØ-öø-ÿ]/;
-function trozosDeTexto(s) {
-  const txt = String(s == null ? "" : s);
-  const trozos = [];
-  const empujar = (t, sub) => { if (t) trozos.push({ t, sub }); };
-  let suelto = "", i = 0;
-  while (i < txt.length) {
-    const forzado = txt[i] === "_" && /^_(?:\{([^}]*)\}|([A-Za-z0-9À-ÖØ-öø-ÿ]+))/.exec(txt.slice(i));
-    if (forzado) {
-      empujar(suelto, false); suelto = "";
-      empujar(forzado[1] !== undefined ? forzado[1] : forzado[2], true);
-      i += forzado[0].length;
-      continue;
-    }
-    if (/\d/.test(txt[i]) && LETRA.test(txt[i - 1] || "")) {
-      const nums = /^\d+/.exec(txt.slice(i))[0];
-      empujar(suelto, false); suelto = "";
-      empujar(nums, true);
-      i += nums.length;
-      continue;
-    }
-    suelto += txt[i++];
-  }
-  empujar(suelto, false);
-  return trozos;
-}
-function ponerTexto(t, s) {
-  t.textContent = "";
-  let abajo = false;
-  for (const p of trozosDeTexto(s)) {
-    const attrs = {};
-    if (p.sub !== abajo) { attrs.dy = p.sub ? 4 : -4; abajo = p.sub; }
-    if (p.sub) attrs["font-size"] = "72%";
-    const e = el("tspan", attrs, t);
-    e.textContent = p.t;
-  }
-}
-const anchoTexto = (s) => trozosDeTexto(s)
-  .reduce((a, p) => a + p.t.length * (p.sub ? 5.2 : 7.2), 0) + 10;
-
 function renderRama(r) {
   const c = curvaDe(r); if (!c) return;
   const g = el("g", { class: "rama" + (S.selR.includes(r.id) ? " sel" : ""), "data-rid": r.id }, gRamas);
@@ -630,7 +1080,7 @@ function renderNodo(n) {
 function render() {
   acomodarRamas();
   gRamas.textContent = ""; gNodos.textContent = ""; gOv.textContent = "";
-  viewport.setAttribute("transform", `translate(${S.pan.x},${S.pan.y}) scale(${S.zoom})`);
+  moverVista();
   $("#gridbg").style.display = S.showGrid ? "" : "none";
   for (const r of S.ramas) renderRama(r);
   for (const n of S.nodos) renderNodo(n);
@@ -658,7 +1108,6 @@ function render() {
     ? `<span class="warn">falta marcar ${falta.join(" y ")}</span>` : "";
   renderInspector();
 }
-
 /* ======================= Mason =======================
    Todo el análisis sale de recorrer el grafo: caminos simples de la entrada a la
    salida, ciclos simples, y qué ciclos no se tocan entre sí. */
@@ -812,7 +1261,6 @@ function ecuaciones() {
     return { nodo: n, texto };
   });
 }
-
 /* ======================= diagrama de bloques equivalente =======================
    El grafo y el diagrama de bloques dicen lo mismo de dos formas: un nodo con
    varias ramas que entran es un sumador, una rama con transmitancia distinta de 1
@@ -863,7 +1311,8 @@ function equivalenteEnBloques() {
   let c = 0;
   const nid = () => "bn" + (++c), eid = () => "be" + (++c);
   const entraEn = new Map(), saleDe = new Map();   // nodo del grafo -> dónde llega / de dónde sale
-  const puerto = new Map();                       // rama -> pata por la que entra
+  const cadenaDe = new Map();                     // nodo del grafo -> sus elementos, de izquierda a derecha
+  const destino = new Map();                      // rama que entra a un sumador -> { el, p }: a cuál y por qué pata
 
   // Vertical: sólo hace falta estirar si el grafo tiene nodos a distintas alturas
   let pasoY = Infinity;
@@ -882,28 +1331,51 @@ function equivalenteEnBloques() {
     const ent = S.ramas.filter(r => r.a === n.id);
     const sal = S.ramas.filter(r => r.de === n.id);
     const base = () => ({ id: nid(), x: 0, y: gy(n.y), label: "", font: 14 });
-    let llega, parte;
-    if (n.tipo !== "normal" || !ent.length) {      // entrada, salida o nodo sin nada que le entre
-      llega = parte = agregar(Object.assign(base(),
-        { type: "io", w: anchoTextoAprox(n.nombre, 14) + 12, h: 20, label: n.nombre }));
-    } else if (ent.length >= 2) {                  // varias ramas entrando: sumador
-      const signos = { l: "", t: "", r: "", b: "" };
-      const prefe = { recto: ["l", "t", "b", "r"], t: ["t", "l", "b", "r"], b: ["b", "l", "t", "r"] };
-      for (const r of ent) {                       // cada rama entra por la pata de su lado
-        const p = (prefe[ladoDeRama(r)] || prefe.recto).find(q => !signos[q]) || "l";
-        signos[p] = /^\s*-/.test(String(r.g)) ? MENOS : "+";
-        puerto.set(r.id, p);
-      }
-      llega = parte = agregar(Object.assign(base(),
+    const io = () => agregar(Object.assign(base(),
+      { type: "io", w: anchoTextoAprox(n.nombre, 14) + 12, h: 20, label: n.nombre }));
+    /* Un sumador con las ramas que le tocan: cada una entra por la pata de su lado y deja
+       ahí su signo. La pata derecha es la salida; si viene encadenado, la izquierda ya la usa
+       el sumador anterior. */
+    const sumador = (ramas, encadenado) => {
+      const signos = { l: encadenado ? "+" : "", t: "", r: "", b: "" };
+      const prefe = { recto: ["l", "t", "b"], t: ["t", "l", "b"], b: ["b", "l", "t"] };
+      const el = agregar(Object.assign(base(),
         { type: "sum", w: ANCHO_SUMA, h: ALTO_SUMA, font: 13, signs: signos, cross: true }));
-      if (sal.length >= 2) {                       // y si además reparte, va un punto de bifurcación
-        parte = agregar(Object.assign(base(), { type: "node", w: 10, h: 10 }));
-        unir(llega, "r", parte, "l");
+      for (const r of ramas) {
+        const p = (prefe[ladoDeRama(r)] || prefe.recto).find(q => !signos[q]);
+        signos[p] = /^\s*-/.test(String(r.g)) ? MENOS : "+";
+        destino.set(r.id, { el, p });
+      }
+      return el;
+    };
+    let cadena;
+    const autolazo = ent.some(r => r.de === n.id);
+    if (n.tipo === "entrada" || !ent.length) {     // la entrada, o un nodo sin nada que le entre
+      cadena = [io()];
+    } else if (n.tipo === "salida" && ent.length === 1 && !autolazo) {
+      cadena = [io()];                             // la salida con una sola rama: el rótulo y listo
+    } else if (ent.length >= 2 || n.tipo === "salida") {
+      /* Varias ramas entrando (o la salida con un autolazo): sumador. Entran tres por
+         sumador; si son más, se encadenan, y cada uno recibe al anterior por la izquierda. */
+      const resto = ent.slice();
+      cadena = [];
+      while (resto.length) {
+        const s = sumador(resto.splice(0, cadena.length ? 2 : 3), cadena.length > 0);
+        if (cadena.length) unir(cadena[cadena.length - 1], "r", s, "l");
+        cadena.push(s);
+      }
+      const ultimo = cadena[cadena.length - 1];
+      if (n.tipo === "salida") {                   // el rótulo de la salida va después de la suma
+        cadena.push(io()); unir(ultimo, "r", cadena[cadena.length - 1], "l");
+      } else if (sal.length >= 2) {                // y si además reparte, va un punto de bifurcación
+        cadena.push(agregar(Object.assign(base(), { type: "node", w: 10, h: 10 })));
+        unir(ultimo, "r", cadena[cadena.length - 1], "l");
       }
     } else {                                       // una sola entrada: un punto sobre la línea
-      llega = parte = agregar(Object.assign(base(), { type: "node", w: 10, h: 10 }));
+      cadena = [agregar(Object.assign(base(), { type: "node", w: 10, h: 10 }))];
     }
-    entraEn.set(n.id, llega); saleDe.set(n.id, parte);
+    cadenaDe.set(n.id, cadena);
+    entraEn.set(n.id, cadena[0]); saleDe.set(n.id, cadena[cadena.length - 1]);
   }
 
   /* Acomodo de izquierda a derecha: cada cosa se apoya contra la anterior dejando
@@ -917,14 +1389,16 @@ function equivalenteEnBloques() {
     if (e.x - e.w / 2 < borde + aire - 0.5) e.x += 20;
     borde = e.x + e.w / 2;
   };
+  // a dónde llega cada rama: a su sumador (y su pata), o al primer elemento del nodo
+  const llegadaDe = (r) => destino.has(r.id) ? destino.get(r.id).el : entraEn.get(r.a);
   enOrden.forEach((n, i) => {
-    const llega = entraEn.get(n.id), parte = saleDe.get(n.id);
-    apoyar(llega, i === 0 ? -llega.w / 2 : AIRE_X);
-    if (parte !== llega) apoyar(parte, AIRE);      // la bifurcación va pegada a su sumador
+    const cadena = cadenaDe.get(n.id);
+    apoyar(cadena[0], i === 0 ? -cadena[0].w / 2 : AIRE_X);
+    for (const e of cadena.slice(1)) apoyar(e, AIRE);   // lo que sigue va pegado: sumadores, bifurcación, rótulo
     const sig = enOrden[i + 1];
     if (!sig) return;
     const r = S.ramas.find(x => x.de === n.id && x.a === sig.id && ladoDeRama(x) === "recto");
-    const et = r && etiquetaDeRama(r, entraEn.get(r.a));
+    const et = r && etiquetaDeRama(r, llegadaDe(r));
     if (!et || et === "1") return;                 // sin bloque en el medio: siguen de largo
     const bl = agregar({ id: nid(), type: "block", h: ALTO_BLOQUE, font: 15, label: et,
       w: anchoTextoAprox(et, 15) + 30, x: 0, y: gy((n.y + sig.y) / 2) });
@@ -938,7 +1412,7 @@ function equivalenteEnBloques() {
      además se pisan los bloques, hace falta el alto del bloque entero. */
   const alturaDeArco = new Map(), puestos = { t: [], b: [] };
   const franjaDe = (r) => {
-    const A = saleDe.get(r.de), B = entraEn.get(r.a);
+    const A = saleDe.get(r.de), B = llegadaDe(r);
     if (!A || !B) return null;
     const et = etiquetaDeRama(r, B), lleva = et !== "1" && et !== "";
     const ancho = lleva ? anchoTextoAprox(et, 15) + 30 : 0;
@@ -964,12 +1438,12 @@ function equivalenteEnBloques() {
     });
 
   for (const r of S.ramas) {
-    const A = saleDe.get(r.de), B = entraEn.get(r.a);
+    const A = saleDe.get(r.de), B = llegadaDe(r);
     if (!A || !B) continue;
     const etiqueta = etiquetaDeRama(r, B);
     const lado = ladoDeRama(r);
     const pSal = lado === "recto" ? "r" : lado;
-    const pEnt = B.type === "sum" ? (puerto.get(r.id) || "l") : (lado === "recto" ? "l" : lado);
+    const pEnt = destino.has(r.id) ? destino.get(r.id).p : (lado === "recto" ? "l" : lado);
     if (etiqueta === "1" || etiqueta === "") {      // transmitancia 1: línea pelada, sin bloque
       unir(A, pSal, B, pEnt);
       continue;
@@ -1009,7 +1483,7 @@ function puntoPuerto(n, p) {
 function caminoOrto(p1, d1, p2, d2) {          // ruteo en ángulo recto, como en el editor
   const s = 20;
   const a = { x: p1.x + d1.x * s, y: p1.y + d1.y * s };
-  const b = { x: p2.x - d2.x * s, y: p2.y - d2.y * s };
+  const b = { x: p2.x + d2.x * s, y: p2.y + d2.y * s };   // se llega desde afuera del puerto
   const medio = [];
   const h1 = d1.x !== 0, h2 = d2.x !== 0;
   if (h1 && h2) { const mx = (a.x + b.x) / 2; medio.push({ x: mx, y: a.y }, { x: mx, y: b.y }); }
@@ -1045,7 +1519,7 @@ function svgDeBloques(d) {
                            puntoPuerto(B, e.to.port), DIRP[e.to.port] || DIRP.l);
     el("path", { d: "M " + pts.map(p => p.x + " " + p.y).join(" L "), fill: "none",
       stroke: "#101418", "stroke-width": 1.6, "stroke-linejoin": "round",
-      "marker-end": "url(#pta)" }, s);
+      "marker-end": B.type === "node" ? "" : "url(#pta)" }, s);   // a una bifurcación no se le pone punta
   }
   const texto = (x, y, cont, tam) => {
     const e = el("text", { x, y, "font-family": "Arial,Helvetica,sans-serif", "font-size": tam,
@@ -1076,7 +1550,6 @@ function svgDeBloques(d) {
   }
   return { svg: s, W, H };
 }
-
 /* ======================= ventana de análisis ======================= */
 function mostrarMason() {
   const A = analizar();
@@ -1096,6 +1569,14 @@ function mostrarMason() {
     `${A.L.length} lazo${A.L.length === 1 ? "" : "s"}`;
 
   let h = htmlEcuaciones();
+  /* Mason toma la entrada como fuente. Si le llegan ramas, lo que calcula es la transferencia
+     desde una señal que se suma en ese nodo, no salida/entrada: se avisa, con la salida de libro. */
+  if (S.ramas.some(r => r.a === A.entrada.id))
+    h = `<div class="aviso">A la entrada ${conSub(A.entrada.nombre)} le llegan ramas. La regla de Mason
+      toma la entrada como una fuente, así que lo que sigue es la transferencia desde una señal que se
+      suma en ${conSub(A.entrada.nombre)}, no ${conSub(A.salida.nombre)}/${conSub(A.entrada.nombre)}. Para
+      ${conSub(A.salida.nombre)}/${conSub(A.entrada.nombre)}, agregá un nodo de entrada nuevo con una rama
+      de transmitancia 1 hasta ${conSub(A.entrada.nombre)}.</div>` + h;
 
   h += `<h4>1 · Trayectorias directas</h4>`;
   h += A.P.length ? tabla(["", "Ganancia", "Recorrido"],
@@ -1150,10 +1631,11 @@ function mostrarMason() {
       const dk = textoDelta(A.cof[i].libres, A.cof[i].det);
       return dk === "1" ? p.simbolo : `${p.simbolo}·Δ${sub(i + 1)}`;
     }).join(" + ");
+    // un término negativo se resta, en vez de quedar "+ -G3"
     const numDes = A.P.map((p, i) => {
       const dk = textoDelta(A.cof[i].libres, A.cof[i].det);
       return dk === "1" ? p.gan : `${envolver(p.gan)}·${envolver(dk)}`;
-    }).join(" + ");
+    }).map((t, i) => i === 0 ? t : /^-/.test(t) ? " − " + t.slice(1) : " + " + t).join("");
     h += `<div class="caja resultado">${conSub(A.salida.nombre)} / ${conSub(A.entrada.nombre)}
       = ( ${conSub(num)} ) / Δ<br><br>= ( ${conSub(numDes)} ) / ( ${conSub(dTexto)} )`;
     const vs = A.P.map((p, i) => {
@@ -1200,18 +1682,7 @@ function pintarEquivalente() {
   };
   $("#bq-png").onclick = () => {
     const { svg: s2, W, H } = svgDeBloques(datos);
-    const img = new Image();
-    img.onload = () => {
-      const esc = 3, cv = document.createElement("canvas");
-      cv.width = W * esc; cv.height = H * esc;
-      const ctx = cv.getContext("2d");
-      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
-      ctx.drawImage(img, 0, 0, cv.width, cv.height);
-      cv.toBlob(bl => { download(limpiarNombre(datos.nombre) + ".png", bl); toast("PNG descargado (3×)"); });
-    };
-    img.onerror = () => toast("No se pudo generar el PNG");
-    img.src = "data:image/svg+xml;base64," +
-      btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s2))));
+    descargarPNG(s2, W, H, "#fff", limpiarNombre(datos.nombre) + ".png");
   };
 }
 function htmlEcuaciones() {
@@ -1228,18 +1699,7 @@ const SUBS = "₀₁₂₃₄₅₆₇₈₉";
 const sub = (n) => String(n).split("").map(d => SUBS[+d] || d).join("");
 const envolver = (s) => /^[-+]?[\w.·()]+$/.test(s) && !/[+−]/.test(s) ? s : "(" + s + ")";
 const redondear = (v) => Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v.toFixed(4).replace(/0+$/, "");
-/* Igual que esc(), pero además baja los subíndices. Va en el análisis: si ahí
-   se leen "a1" y "G1" en crudo se pierde de vista cuál es nodo y cuál ganancia.
-   Devuelve HTML, así que no sirve para meter en un atributo. */
-const conSub = (s) => trozosDeTexto(s)
-  .map(p => p.sub ? "<sub>" + esc(p.t) + "</sub>" : esc(p.t)).join("");
-function esc(s) {
-  return String(s == null ? "" : s).replace(/[&<>"]/g,
-    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
 /* ======================= panel derecho ======================= */
-let inspLock = false;
 function renderInspector() {
   if (inspLock) return;
   const box = $("#insp");
@@ -1264,8 +1724,7 @@ function renderInspector() {
       <div class="iconbar" style="margin-top:10px">
         <button class="btn" id="r-invertir">Invertir sentido</button>
         <button class="btn" id="r-espejo">Arquear al otro lado</button>
-        <button class="btn" id="r-auto">Acomodar sola</button>
-        <button class="btn" id="r-del">Borrar</button></div>
+        <button class="btn" id="r-auto">Acomodar sola</button></div>
       <div class="hint" style="margin-top:8px">La transmitancia multiplica a la variable del nodo del
         que sale. Con <b>_</b> escribís subíndices: <b>G_1</b> se dibuja G₁.</div></div>`;
   }
@@ -1284,8 +1743,10 @@ function renderInspector() {
         <input type="number" id="n-x" step="${S.grid}" value="${Math.round(n.x)}">
         <input type="number" id="n-y" step="${S.grid}" value="${Math.round(n.y)}"></div></div>
       <div class="iconbar" style="margin-top:10px">
-        <button class="btn" id="n-auto">Autolazo</button>
-        <button class="btn" id="n-del">Borrar</button></div>
+        <button class="btn" id="n-auto">Autolazo</button></div>
+      <div class="row" style="margin-top:8px"><div class="fill">
+        <button class="btn" id="n-dup" style="width:100%;display:flex;align-items:center;justify-content:space-between" title="Duplicar selección (Ctrl+D)"><span style="display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>Duplicar</span><kbd>Ctrl+D</kbd></button>
+      </div></div>
       <div class="hint" style="margin-top:8px">Los nodos van en minúscula —las mayúsculas son las
         ganancias— y el subíndice recién aparece cuando hay que repetir una letra. Sólo puede haber
         una entrada y una salida: al marcar una, la anterior vuelve a ser nodo interno.</div></div>`;
@@ -1318,14 +1779,8 @@ function resumenMason() {
       ? "Ecuaciones, cofactores y función de transferencia."
       : "Marcá un nodo como entrada y otro como salida para que se pueda calcular."}</div></div>`;
 }
-function lock(fn) { inspLock = true; try { fn(); } finally { inspLock = false; } }
 function wireInspector(nsel, rsel) {
-  const live = (id, fn) => {
-    const e = document.getElementById(id); if (!e) return;
-    e.addEventListener("input", () => lock(() => { fn(e.value); render(); }));
-    e.addEventListener("change", () => { fn(e.value); commit(); render(); });
-    e.addEventListener("keydown", ev => ev.stopPropagation());
-  };
+  const live = (id, fn) => enVivo(id, fn, true);
   live("r-g", v => rsel.forEach(r => r.g = v));
   live("r-curva", v => rsel.forEach(r => { r.curva = +v || 0; r.curvaFija = true; }));
   live("n-nombre", v => nsel.forEach(n => n.nombre = v));
@@ -1343,78 +1798,40 @@ function wireInspector(nsel, rsel) {
   if (de) de.onchange = () => { rsel.forEach(r => r.de = de.value); commit(); render(); };
   if (a) a.onchange = () => { rsel.forEach(r => r.a = a.value); commit(); render(); };
 
-  const bind = (id, fn) => { const e = document.getElementById(id); if (e) e.onclick = () => { fn(); commit(); render(); }; };
-  bind("r-invertir", () => rsel.forEach(r => { const t = r.de; r.de = r.a; r.a = t; r.curva = -r.curva; }));
-  bind("r-espejo", () => rsel.forEach(r => { r.curva = -r.curva || -ARCO_BASE; r.curvaFija = true; }));
-  bind("r-auto", () => rsel.forEach(r => delete r.curvaFija));
-  bind("r-del", borrar);
-  bind("n-del", borrar);
-  bind("n-auto", () => nsel.forEach(n => S.ramas.push(nuevaRama(n.id, n.id))));
+  alClic("r-invertir", () => rsel.forEach(r => { const t = r.de; r.de = r.a; r.a = t; r.curva = -r.curva; }));
+  alClic("r-espejo", () => rsel.forEach(r => { r.curva = -r.curva || -ARCO_BASE; r.curvaFija = true; }));
+  alClic("r-auto", () => rsel.forEach(r => delete r.curvaFija));
+  alClic("n-auto", () => nsel.forEach(n => S.ramas.push(nuevaRama(n.id, n.id))));
+  if ($("#n-dup")) $("#n-dup").onclick = duplicar;
   const m = document.getElementById("b-mason2");
   if (m) m.onclick = mostrarMason;
 }
-
-/* ======================= historial ======================= */
-const docDatos = () => ({ nombre: limpiarNombre(S.nombre), nodos: S.nodos, ramas: S.ramas });
-let undoStack = [], redoStack = [], lastSnap = null;
-const snapshot = () => JSON.stringify(Object.assign(docDatos(), { uidc }));
-function restore(js) {
-  const d = JSON.parse(js);
-  S.nodos = d.nodos; S.ramas = d.ramas; uidc = d.uidc || uidc;
-  S.nombre = d.nombre || S.nombre;
-  S.sel = S.sel.filter(getNodo); S.selR = S.selR.filter(getRama);
-}
-function commit() {
-  const s = snapshot();
-  if (s === lastSnap) return;
-  if (lastSnap !== null) { undoStack.push(lastSnap); if (undoStack.length > 120) undoStack.shift(); }
-  redoStack = []; lastSnap = s;
-}
-function undo() {
-  if (!undoStack.length) return;
-  redoStack.push(snapshot());
-  const s = undoStack.pop(); restore(s); lastSnap = s; render();
-}
-function redo() {
-  if (!redoStack.length) return;
-  undoStack.push(snapshot());
-  const s = redoStack.pop(); restore(s); lastSnap = s; render();
-}
-function borrar() {
-  const ids = new Set(S.sel);
-  S.nodos = S.nodos.filter(n => !ids.has(n.id));
-  S.ramas = S.ramas.filter(r => !ids.has(r.de) && !ids.has(r.a) && !S.selR.includes(r.id));
-  S.sel = []; S.selR = [];
-}
-
-/* ======================= interacción ======================= */
-let drag = null, spaceDown = false, modo = "select", pendiente = null;
-function toWorld(ev) {
-  const r = svg.getBoundingClientRect();
-  return { x: (ev.clientX - r.left - S.pan.x) / S.zoom, y: (ev.clientY - r.top - S.pan.y) / S.zoom };
-}
-const idDeNodo = (t) => { const g = t.closest ? t.closest("[data-id]") : null; return g && g.getAttribute("data-id"); };
-const idDeRama = (t) => { const g = t.closest ? t.closest("[data-rid]") : null; return g && g.getAttribute("data-rid"); };
-
-function setModo(m) {
-  modo = m;
-  svg.classList.toggle("mode-connect", m === "connect");
-  $("#m-select").classList.toggle("on", m === "select");
-  $("#m-multi").classList.toggle("on", m === "multi");
-  $("#m-connect").classList.toggle("on", m === "connect");
-  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un nodo a otro para dibujar la rama"
-    : m === "multi" ? "Cada clic suma o saca de la selección · arrastrá en el fondo para encerrar varios" : "";
-}
-/* En selección múltiple cada clic suma o saca, igual que si tuvieras Shift apretado */
-const sumandoALaSeleccion = (ev) => ev.shiftKey || modo === "multi";
-function setPendiente(t) {
-  pendiente = t;
-  document.querySelectorAll(".ptool").forEach(b => b.classList.toggle("on", b.dataset.add === t));
-  $("#st-hint").textContent = t ? "Hacé clic en la hoja para poner el nodo · Esc cancela" : "";
+/* ======================= exportar =======================
+   El SVG lleva un <style> propio con los colores fijos: no depende de la página. */
+function buildExportSVG() {
+  const b = bboxAll(), m = 30;
+  const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
+  const s = svgExportado(b, m, W, H);
+  const st = document.createElementNS(NS, "style");
+  st.textContent = `svg{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#fff}
+    .n-dot{fill:#101418}.n-io{fill:#fff;stroke:#101418;stroke-width:2}
+    .n-name{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central;font-size:13px}
+    .n-rol{font-family:monospace;fill:#93a0ae;text-anchor:middle;dominant-baseline:central;font-size:8.5px}
+    .r-linea{fill:none;stroke:#101418;stroke-width:1.6;stroke-linecap:round}
+    .r-punta{fill:#101418}.io-stub{stroke:#101418;stroke-width:1.6;fill:none}
+    .r-lab{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central;font-size:13px}
+    .r-lab-bg{fill:#fff}`;
+  s.appendChild(st);
+  fondoExportado(s, b, m, W, H, "#fff");
+  const [gr, gn] = capasSinSeleccion([gRamas, gNodos]);
+  gr.querySelectorAll(".r-hit").forEach(x => x.remove());
+  gn.querySelectorAll(".n-hit").forEach(x => x.remove());
+  s.appendChild(gr); s.appendChild(gn);
+  return { svg: s, W, H };
 }
 /* ======================= editar con doble clic =======================
-   Un input de verdad apoyado sobre el elemento: el nombre del nodo o la
-   transmitancia de la rama, sin tener que ir hasta el panel. */
+   Un input de verdad apoyado sobre el elemento: el mismo campo del panel, pero sin
+   tener que ir hasta el panel. */
 let editorAbierto = null;
 function cerrarEditor(guardar) {
   if (!editorAbierto) return;
@@ -1425,13 +1842,14 @@ function cerrarEditor(guardar) {
   if (guardar) commit();
   render();
 }
-function editarEnLaHoja(xMundo, yMundo, valor, aplicar) {
+/* (xMundo, yMundo) es el centro del campo en coordenadas de la hoja; ancho, en px de pantalla */
+function editarEnLaHoja(xMundo, yMundo, valor, ancho, aplicar) {
   cerrarEditor(false);
   const input = document.createElement("input");
   input.type = "text"; input.className = "editor-hoja"; input.value = valor == null ? "" : valor;
   input.style.left = (S.pan.x + xMundo * S.zoom) + "px";
   input.style.top = (S.pan.y + yMundo * S.zoom) + "px";
-  input.style.width = Math.max(110, 90 * S.zoom) + "px";
+  input.style.width = ancho + "px";
   $("#stage").appendChild(input);
   editorAbierto = { input, aplicar };
   input.focus(); input.select();
@@ -1442,38 +1860,61 @@ function editarEnLaHoja(xMundo, yMundo, valor, aplicar) {
   });
   input.addEventListener("blur", () => cerrarEditor(true));
 }
-svg.addEventListener("dblclick", ev => {
-  const nid = idDeNodo(ev.target);
-  if (nid) {
-    const n = getNodo(nid);
-    S.sel = [nid]; S.selR = []; render();
-    editarEnLaHoja(n.x, n.y - 20, n.nombre, v => n.nombre = v);
-    return;
-  }
-  const w = toWorld(ev);
-  const rid = idDeRama(ev.target) || (ramaCerca(w) || {}).id;
-  const r = rid && getRama(rid);
-  if (r) {
-    S.selR = [rid]; S.sel = []; render();
-    const c = curvaDe(r);
-    editarEnLaHoja(c.lx, c.ly, r.g, v => r.g = v);
-  }
-});
+/* El doble clic no se puede esperar del navegador: al apretar, el elemento se redibuja y
+   el navegador descarta el "click" (el elemento del pointerdown ya no existe cuando llega
+   el pointerup), así que "dblclick" nunca se dispara. Se detecta a mano: dos pulsaciones
+   seguidas (400 ms), cerca (6 px) y sobre lo mismo. No volver a depender del evento nativo
+   ni agregar otro manejador de dblclick que enfoque el panel: le roba el foco al editor.
 
+   tocado(ev) dice sobre qué se apretó: un objeto con un id (las dos pulsaciones tienen que
+   coincidir en él) o null si ahí no hay nada que editar. alDobleClic recibe lo que devolvió
+   en la segunda pulsación, después de que termine el soltado normal. */
+const MS_DOBLE_CLIC = 400, PX_DOBLE_CLIC = 6;
+function detectarDobleClic(tocado, alDobleClic) {
+  let ultimaPulsacion = null, dobleClic = null;
+  svg.addEventListener("pointerdown", ev => {
+    if (ev.button !== 0 || (ev.pointerType === "touch" && !ev.isPrimary)) return;
+    const t = tocado(ev), u = ultimaPulsacion;
+    dobleClic = null;
+    if (t && u && u.id === t.id && ev.timeStamp - u.t < MS_DOBLE_CLIC
+        && Math.hypot(ev.clientX - u.x, ev.clientY - u.y) < PX_DOBLE_CLIC) {
+      dobleClic = t;
+      ultimaPulsacion = null;
+    } else ultimaPulsacion = t ? { id: t.id, t: ev.timeStamp, x: ev.clientX, y: ev.clientY } : null;
+  }, true);
+  svg.addEventListener("pointerup", () => {
+    if (!dobleClic) return;
+    const t = dobleClic;
+    dobleClic = null;
+    setTimeout(() => alDobleClic(t), 0);
+  }, true);
+}
+/* Para las herramientas que atienden el doble clic con un manejador de "dblclick": se le
+   manda uno sintético a lo que haya en ese punto de la hoja. */
+const enLaHoja = (ev) => ({ id: "hoja", x: ev.clientX, y: ev.clientY });
+function dobleClicSintetico({ x, y }) {
+  if (editorAbierto) return;
+  const blanco = document.elementFromPoint(x, y);
+  if (blanco && svg.contains(blanco))
+    blanco.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, clientX: x, clientY: y, detail: 2 }));
+}
 /* ======================= gestos táctiles =======================
-   Un dedo en el fondo mueve la hoja, un dedo sobre un nodo o una rama lo
-   selecciona igual que con el mouse, y dos dedos hacen zoom. */
+   Un dedo en el fondo mueve la hoja, un dedo sobre un elemento lo selecciona y lo
+   arrastra igual que con el mouse, y dos dedos hacen zoom. Qué es "fondo" lo dice
+   esFondo() de cada herramienta, y sus manejadores del puntero llaman a estas. */
 const dedos = new Map();                     // pointerId -> posición en pantalla
 let pellizco = null, gestoZoom = false;
-const esFondo = (t) => !(t && t.closest && t.closest("[data-id],[data-rid]"));
 function centroDedos() {
   const p = Array.from(dedos.values());
   return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2,
            d: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) };
 }
-function cancelarDrag() {                    // al aparecer el segundo dedo se deshace lo empezado
+/* Al aparecer el segundo dedo (o con Esc) se deshace lo que se había empezado a arrastrar.
+   Lo que no sea mover elementos lo deshace cancelarArrastre() de la herramienta, si tiene. */
+function cancelarDrag() {
   if (drag && drag.kind === "move" && drag.orig)
-    drag.orig.forEach(o => { const n = getNodo(o.id); if (n) { n.x = o.x; n.y = o.y; } });
+    drag.orig.forEach(o => { const n = buscarNodo(o.id); if (n) { n.x = o.x; n.y = o.y; } });
+  if (HERRAMIENTA.cancelarArrastre) HERRAMIENTA.cancelarArrastre(drag);
   drag = null;
   svg.classList.remove("panning");
 }
@@ -1502,21 +1943,69 @@ function soltarDedo(ev) {
   if (!dedos.size) { const hubo = gestoZoom; gestoZoom = false; if (hubo) { drag = null; return true; } }
   return gestoZoom;                          // mientras queden dedos del pellizco, no se arrastra
 }
+/* ======================= interacción ======================= */
+let modo = "select", pendiente = null;
+const idDeNodo = (t) => { const g = t.closest ? t.closest("[data-id]") : null; return g && g.getAttribute("data-id"); };
+const idDeRama = (t) => { const g = t.closest ? t.closest("[data-rid]") : null; return g && g.getAttribute("data-rid"); };
+
+function setModo(m) {
+  modo = m;
+  svg.classList.toggle("mode-connect", m === "connect");
+  $("#m-select").classList.toggle("on", m === "select");
+  $("#m-multi").classList.toggle("on", m === "multi");
+  $("#m-connect").classList.toggle("on", m === "connect");
+  $("#st-hint").textContent = m === "connect" ? "Arrastrá de un nodo a otro para dibujar la rama"
+    : m === "multi" ? "Cada clic suma o saca de la selección · arrastrá en el fondo para encerrar varios" : "";
+}
+/* En selección múltiple cada clic suma o saca, igual que si tuvieras Shift apretado */
+const sumandoALaSeleccion = (ev) => ev.shiftKey || modo === "multi";
+function setPendiente(t) {
+  pendiente = t;
+  document.querySelectorAll(".ptool").forEach(b => b.classList.toggle("on", b.dataset.add === t));
+  $("#st-hint").textContent = t ? "Hacé clic en la hoja para poner el nodo · Esc cancela" : "";
+}
+/* ---- doble clic: el nombre del nodo o la transmitancia de la rama, sobre la hoja ---- */
+svg.addEventListener("dblclick", ev => {
+  const nid = idDeNodo(ev.target);
+  if (nid) {
+    const n = getNodo(nid);
+    S.sel = [nid]; S.selR = []; render();
+    editarEnLaHoja(n.x, n.y - 20, n.nombre, Math.max(110, 90 * S.zoom), v => n.nombre = v);
+    return;
+  }
+  const w = toWorld(ev);
+  const rid = idDeRama(ev.target) || (ramaCerca(w) || {}).id;
+  const r = rid && getRama(rid);
+  if (r) {
+    S.selR = [rid]; S.sel = []; render();
+    const c = curvaDe(r);
+    editarEnLaHoja(c.lx, c.ly, r.g, Math.max(110, 90 * S.zoom), v => r.g = v);
+  }
+});
+detectarDobleClic(enLaHoja, dobleClicSintetico);
+
+/* ---- puntero (mouse, lápiz y un dedo) ---- */
+const esFondo = (t) => !(t && t.closest && t.closest("[data-id],[data-rid]"));
 svg.addEventListener("pointercancel", ev => { soltarDedo(ev); drag = null; render(); });
 
 svg.addEventListener("pointerdown", ev => {
   if (ev.pointerType === "touch") {
     dedos.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-    if (dedos.size === 2) { svg.setPointerCapture(ev.pointerId); return arrancarPellizco(); }
+    if (dedos.size === 2) { capturarPuntero(ev); return arrancarPellizco(); }
     if (dedos.size > 2) return;
   }
-  if (ev.button === 1 || spaceDown) {
+  // rueda del mouse, barra espaciadora, o Ctrl (⌘) + clic izquierdo: mueven la hoja
+  if (ev.button === 1 || spaceDown || (ev.button === 0 && (ev.ctrlKey || ev.metaKey))) {
     drag = { kind: "pan", x0: ev.clientX, y0: ev.clientY, p0: Object.assign({}, S.pan) };
-    svg.classList.add("panning"); svg.setPointerCapture(ev.pointerId); return;
+    svg.classList.add("panning"); capturarPuntero(ev); return;
   }
   if (ev.button !== 0) return;
   const w = toWorld(ev), t = ev.target;
-  svg.setPointerCapture(ev.pointerId);
+  capturarPuntero(ev);
+
+  if (drag && drag.kind === "curve-new") {
+    commit(); drag = null; render(); return;
+  }
 
   // un dedo en el fondo mueve la hoja (con el mouse eso es la banda de selección)
   if (ev.pointerType === "touch" && esFondo(t) && pendiente !== "nodo" && !ramaCerca(w) && modo !== "multi") {
@@ -1547,6 +2036,7 @@ svg.addEventListener("pointerdown", ev => {
   if (rid) {
     if (sumandoALaSeleccion(ev)) S.selR = S.selR.includes(rid) ? S.selR.filter(x => x !== rid) : S.selR.concat(rid);
     else { S.selR = [rid]; S.sel = []; }
+    drag = { kind: "curve", rid, w0: w, curva0: getRama(rid).curva || 0 };
     render(); return;
   }
   if (!sumandoALaSeleccion(ev)) { S.sel = []; S.selR = []; }
@@ -1564,11 +2054,37 @@ svg.addEventListener("pointermove", ev => {
   if (drag.kind === "pan") {
     S.pan.x = drag.p0.x + (ev.clientX - drag.x0);
     S.pan.y = drag.p0.y + (ev.clientY - drag.y0);
-    render(); return;
+    moverVista(); return;
   }
   if (drag.kind === "move") {
     const dx = w.x - drag.w0.x, dy = w.y - drag.w0.y;
     drag.orig.forEach(o => { const n = getNodo(o.id); if (n) { n.x = snapV(o.x + dx); n.y = snapV(o.y + dy); } });
+    render(); return;
+  }
+  if (drag.kind === "curve") {
+    const r = getRama(drag.rid);
+    if (!r) return;
+    const A = getNodo(r.de), B = getNodo(r.a);
+    if (!A || !B) return;
+    if (r.de === r.a) {
+      r.curva = drag.curva0 - (w.y - drag.w0.y) * (drag.curva0 < 0 ? -1 : 1);
+    } else {
+      const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
+      r.curva = drag.curva0 + ((w.x - drag.w0.x) * -dy / L + (w.y - drag.w0.y) * dx / L) * 2;
+    }
+    r.curvaFija = true;
+    render(); return;
+  }
+  if (drag.kind === "curve-new") {
+    const r = getRama(drag.rid);
+    if (!r) return;
+    const A = getNodo(r.de), B = getNodo(r.a);
+    if (!A || !B) return;
+    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
+    const nx = -dy / L, ny = dx / L;
+    const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+    r.curva = ((w.x - mx) * nx + (w.y - my) * ny) * 2;
+    r.curvaFija = true;
     render(); return;
   }
   if (drag.kind === "connect") { drag.cur = w; render(); return; }
@@ -1584,6 +2100,10 @@ svg.addEventListener("pointerup", ev => {
     if (destino) {
       const r = nuevaRama(drag.fromId, destino);
       S.ramas.push(r); S.selR = [r.id]; S.sel = [];
+      if (drag.fromId !== destino) {
+        drag = { kind: "curve-new", rid: r.id };
+        return;
+      }
       commit();
     }
   }
@@ -1594,215 +2114,70 @@ svg.addEventListener("pointerup", ev => {
     if (Math.abs(r - l) > 4 || Math.abs(bo - t) > 4)
       S.sel = S.nodos.filter(n => n.x >= l && n.x <= r && n.y >= t && n.y <= bo).map(n => n.id);
   }
-  if (drag.kind === "move") commit();
+  if (drag.kind === "move" || drag.kind === "curve") commit();
   svg.classList.remove("panning");
   drag = null; render();
 });
-svg.addEventListener("wheel", ev => {
-  ev.preventDefault();
-  if (ev.ctrlKey || ev.metaKey) {
-    const r = svg.getBoundingClientRect();
-    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
-    const antes = S.zoom;
-    S.zoom = Math.max(.2, Math.min(4, S.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
-    S.pan.x = mx - (mx - S.pan.x) * (S.zoom / antes);
-    S.pan.y = my - (my - S.pan.y) * (S.zoom / antes);
-  } else if (ev.shiftKey) { S.pan.x -= ev.deltaY; }
-  else { S.pan.x -= ev.deltaX; S.pan.y -= ev.deltaY; }
-  render();
-}, { passive: false });
-
+instalarRueda();
+function fit() {
+  if (!S.nodos.length) { S.zoom = 1; S.pan = { x: 90, y: 70 }; render(); return; }
+  acomodarRamas();                             // el encuadre tiene que ver los arcos ya acomodados
+  encuadrar(bboxAll(), 60, 2);
+}
+/* ======================= teclado =======================
+   Lo común a las tres herramientas. Lo propio (insertar, cambiar de modo, análisis)
+   lo atiende teclaPropia(k, ev) de cada una, que devuelve true si la usó, y Esc lo
+   resuelve alEscape(). */
 window.addEventListener("keydown", ev => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
   const k = ev.key.toLowerCase();
+  // Con una ventana abierta (ayuda, tabla de verdad, análisis, abrir) los atajos no tocan el
+  // diagrama de atrás: Ctrl+C copia el texto de la ventana, Supr no borra lo seleccionado, etc.
+  // Sólo Esc hace algo: cerrarla.
+  if (document.querySelector(".overlay.show")) {
+    if (k === "escape") document.querySelectorAll(".overlay.show").forEach(o => o.classList.remove("show"));
+    return;
+  }
   if (ev.code === "Space") { spaceDown = true; ev.preventDefault(); return; }
-  if ((ev.ctrlKey || ev.metaKey) && k === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
-  if ((ev.ctrlKey || ev.metaKey) && k === "y") { ev.preventDefault(); redo(); return; }
-  if ((ev.ctrlKey || ev.metaKey) && k === "a") { ev.preventDefault(); S.sel = S.nodos.map(n => n.id); render(); return; }
-  if (ev.ctrlKey || ev.metaKey) return;
+  if (ev.ctrlKey || ev.metaKey) {
+    if (k === "z") { ev.preventDefault(); ev.shiftKey ? redo() : undo(); }
+    else if (k === "y") { ev.preventDefault(); redo(); }
+    else if (k === "c") { ev.preventDefault(); copiarSel(); }
+    else if (k === "x") { ev.preventDefault(); cortarSel(); }
+    else if (k === "v") { ev.preventDefault(); pegarSel(); }
+    else if (k === "d") { ev.preventDefault(); duplicar(); }
+    else if (k === "a") { ev.preventDefault(); S.sel = S[HERRAMIENTA.nodos].map(n => n.id); render(); }
+    return;
+  }
   if (k === "delete" || k === "backspace") { ev.preventDefault(); borrar(); commit(); render(); return; }
-  if (k === "escape") { setPendiente(null); S.sel = []; S.selR = [];
-    document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show")); render(); return; }
-  if (k === "n") return setPendiente("nodo");
-  if (k === "v") return setModo("select");
-  if (k === "x") return setModo("multi");
-  if (k === "c") return setModo("connect");
-  if (k === "a") return mostrarMason();
+  if (k === "escape") return alEscape();
+  if (teclaPropia(k, ev)) return;
   if (k === "f") return fit();
   if (k === "?") return $("#ov-help").classList.add("show");
-  if (ev.key.startsWith("Arrow") && S.sel.length) {
+  if (ev.key.startsWith("Arrow") && S.sel.length) {        // un paso de grilla; con Shift, 1 px
     ev.preventDefault();
     const d = ev.shiftKey ? 1 : S.grid;
     const dx = ev.key === "ArrowLeft" ? -d : ev.key === "ArrowRight" ? d : 0;
     const dy = ev.key === "ArrowUp" ? -d : ev.key === "ArrowDown" ? d : 0;
-    S.sel.map(getNodo).forEach(n => { if (n) { n.x += dx; n.y += dy; } });
+    S.sel.map(buscarNodo).forEach(n => { if (n) { n.x += dx; n.y += dy; } });
     render(); clearTimeout(window._kt); window._kt = setTimeout(commit, 400);
   }
 });
 window.addEventListener("keyup", ev => { if (ev.code === "Space") spaceDown = false; });
-
-function fit() {
-  if (!S.nodos.length) { S.zoom = 1; S.pan = { x: 90, y: 70 }; render(); return; }
-  acomodarRamas();                             // el encuadre tiene que ver los arcos ya acomodados
-  const b = bboxAll(), r = svg.getBoundingClientRect(), m = 60;
-  S.zoom = Math.max(.2, Math.min((r.width - m * 2) / Math.max(1, b.r - b.l),
-                                 (r.height - m * 2) / Math.max(1, b.b - b.t), 2));
-  S.pan.x = (r.width - (b.r - b.l) * S.zoom) / 2 - b.l * S.zoom;
-  S.pan.y = (r.height - (b.b - b.t) * S.zoom) / 2 - b.t * S.zoom;
-  render();
-}
-function toast(m) {
-  const t = $("#toast"); t.textContent = m; t.classList.add("show");
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1900);
-}
-
-/* ======================= exportar y abrir ======================= */
-function buildExportSVG() {
-  const b = bboxAll(), m = 30;
-  const W = Math.max(60, b.r - b.l) + m * 2, H = Math.max(60, b.b - b.t) + m * 2;
-  const s = document.createElementNS(NS, "svg");
-  s.setAttribute("width", W); s.setAttribute("height", H);
-  s.setAttribute("viewBox", `${b.l - m} ${b.t - m} ${W} ${H}`);
-  const meta = document.createElementNS(NS, "metadata");
-  meta.setAttribute("id", "uni-tools-datos");
-  meta.textContent = JSON.stringify(docDatos());
-  s.appendChild(meta);
-  const st = document.createElementNS(NS, "style");
-  st.textContent = `svg{--c-nodo:#101418;--c-rama:#101418;--c-texto:#101418;--c-fondo:#fff}
-    .n-dot{fill:#101418}.n-io{fill:#fff;stroke:#101418;stroke-width:2}
-    .n-name{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central;font-size:13px}
-    .n-rol{font-family:monospace;fill:#93a0ae;text-anchor:middle;dominant-baseline:central;font-size:8.5px}
-    .r-linea{fill:none;stroke:#101418;stroke-width:1.6;stroke-linecap:round}
-    .r-punta{fill:#101418}.io-stub{stroke:#101418;stroke-width:1.6;fill:none}
-    .r-lab{font-family:Arial,Helvetica,sans-serif;fill:#101418;text-anchor:middle;dominant-baseline:central;font-size:13px}
-    .r-lab-bg{fill:#fff}`;
-  s.appendChild(st);
-  const bg = document.createElementNS(NS, "rect");
-  bg.setAttribute("x", b.l - m); bg.setAttribute("y", b.t - m);
-  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#fff");
-  s.appendChild(bg);
-  const sn = S.sel, sr = S.selR; S.sel = []; S.selR = []; render();
-  const gr = gRamas.cloneNode(true), gn = gNodos.cloneNode(true);
-  gr.querySelectorAll(".r-hit").forEach(x => x.remove());
-  gn.querySelectorAll(".n-hit").forEach(x => x.remove());
-  s.appendChild(gr); s.appendChild(gn);
-  S.sel = sn; S.selR = sr; render();
-  return { svg: s, W, H };
-}
-function download(name, blob) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-}
-function cargarDoc(d, desdeArchivo) {
-  S.nodos = d.nodos || []; S.ramas = d.ramas || [];
-  S.nombre = limpiarNombre(desdeArchivo || d.nombre || NOMBRE_DEF);
-  uidc = proximoUid(S.nodos, S.ramas);
-  const vistos = new Set();
-  const repetidos = sanearIds(S.nodos, "n", vistos) + sanearIds(S.ramas, "r", vistos);
-  if (repetidos) setTimeout(() => toast("Se renumeraron " + repetidos + " ids repetidos"), 60);
-  S.sel = []; S.selR = [];
-}
-function datosDeSVG(txt) {
-  const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
-  if (doc.querySelector("parsererror")) throw new Error("no es un SVG válido");
-  const m = doc.querySelector("metadata#uni-tools-datos");
-  if (!m || !m.textContent.trim()) throw new Error("ese SVG no trae los datos del diagrama");
-  return JSON.parse(m.textContent);
-}
-function abrirTexto(txt, nombreDelArchivo) {
-  const t = String(txt || "").trim();
-  if (!t) return toast("No hay nada para abrir");
-  let d;
-  try { d = t[0] === "{" ? JSON.parse(t) : datosDeSVG(t); }
-  catch (e) {
-    return toast(/metadata|datos/.test(e.message)
-      ? "Ese SVG no trae los datos del diagrama: se exportó con otra herramienta"
-      : "Ese archivo no se pudo leer");
-  }
-  if (!d || !Array.isArray(d.nodos)) return toast("Ese archivo no tiene un diagrama de flujo adentro");
-  cargarDoc(d, nombreDelArchivo && nombreDelArchivo.replace(/\.(json|svg)$/i, ""));
-  commit(); fit();
-  $("#ov-io").classList.remove("show");
-  toast("Diagrama cargado");
-}
-
-/* ======================= barra ======================= */
-$("#m-select").onclick = () => setModo("select");
-$("#m-multi").onclick = () => setModo(modo === "multi" ? "select" : "multi");
-$("#m-connect").onclick = () => setModo("connect");
+/* ======================= barra de arriba, panel y ventanas ======================= */
 $("#b-undo").onclick = undo;
 $("#b-redo").onclick = redo;
 $("#b-del").onclick = () => { borrar(); commit(); render(); };
-$("#b-zoomin").onclick = () => { S.zoom = Math.min(4, S.zoom * 1.2); render(); };
-$("#b-zoomout").onclick = () => { S.zoom = Math.max(.2, S.zoom / 1.2); render(); };
-$("#b-fit").onclick = fit;
-$("#b-gridshow").onclick = () => { S.showGrid = !S.showGrid; render(); };
-$("#b-mason").onclick = mostrarMason;
+if ($("#b-dup")) $("#b-dup").onclick = duplicar;
+if ($("#b-snap")) $("#b-snap").onclick = () => { S.snap = !S.snap; $("#b-snap").classList.toggle("on", S.snap); };
 $("#b-help").onclick = () => $("#ov-help").classList.add("show");
-$("#b-clear").onclick = () => {
-  if (!S.nodos.length || confirm("¿Vaciar el diagrama?")) {
-    S.nodos = []; S.ramas = []; S.sel = []; S.selR = []; commit(); render();
-  }
-};
-$("#b-svg").onclick = () => {
-  if (!S.nodos.length) return toast("El diagrama está vacío");
-  download(nombreArchivo("svg"),
-    new Blob([new XMLSerializer().serializeToString(buildExportSVG().svg)], { type: "image/svg+xml" }));
-  toast("SVG descargado");
-};
-$("#b-png").onclick = () => {
-  if (!S.nodos.length) return toast("El diagrama está vacío");
-  const { svg: s, W, H } = buildExportSVG();
-  const img = new Image();
-  img.onload = () => {
-    const sc = 3, c = document.createElement("canvas");
-    c.width = W * sc; c.height = H * sc;
-    const ctx = c.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-    c.toBlob(bl => { download(nombreArchivo("png"), bl); toast("PNG descargado (3×)"); });
-  };
-  img.onerror = () => toast("No se pudo generar el PNG");
-  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(s))));
-};
-$("#b-save").onclick = () => {
-  download(nombreArchivo("json"), new Blob([JSON.stringify(docDatos(), null, 1)], { type: "application/json" }));
-  toast("Diagrama guardado");
-};
-$("#b-open").onclick = () => {
-  $("#io-text").value = ""; $("#io-file").value = "";
-  $("#io-file-nom").textContent = "Ningún archivo elegido";
-  $("#ov-io").classList.add("show");
-};
-$("#io-cancel").onclick = () => $("#ov-io").classList.remove("show");
-$("#io-file-btn").onclick = () => $("#io-file").click();
-$("#io-file").onchange = (ev) => {
-  const f = ev.target.files && ev.target.files[0];
-  if (!f) return;
-  $("#io-file-nom").textContent = f.name;
-  const r = new FileReader();
-  r.onload = () => abrirTexto(r.result, f.name);
-  r.onerror = () => toast("No se pudo leer el archivo");
-  r.readAsText(f);
-};
-$("#io-ok").onclick = () => abrirTexto($("#io-text").value);
-$("#b-nombre").addEventListener("input", () => {
-  S.nombre = $("#b-nombre").value;
-  document.title = limpiarNombre(S.nombre) + " · Diagramas de flujo de señales";
-});
-$("#b-nombre").addEventListener("change", () => {
-  S.nombre = limpiarNombre($("#b-nombre").value);
-  $("#b-nombre").value = S.nombre; commit();
-});
-$("#b-nombre").addEventListener("keydown", ev => ev.stopPropagation());
-document.querySelectorAll(".ptool").forEach(b =>
-  b.onclick = () => setPendiente(pendiente === b.dataset.add ? null : b.dataset.add));
+// las ventanas se cierran con un clic afuera
 document.querySelectorAll(".overlay").forEach(o =>
   o.addEventListener("click", e => { if (e.target === o) o.classList.remove("show"); }));
+// los grupos de la barra se pliegan y despliegan con un clic en su nombre
 document.querySelectorAll(".glab").forEach(g =>
   g.addEventListener("click", () => g.parentElement.classList.toggle("collapsed")));
+// el panel lateral se oculta y se muestra; la hoja se redibuja cuando termina la transición
 const togglePanelBtn = $("#b-toggle-panel"), inspectorPanel = $("#inspector");
 togglePanelBtn.addEventListener("click", () => {
   inspectorPanel.classList.toggle("collapsed");
@@ -1813,7 +2188,32 @@ if (window.innerWidth <= 720) {              // en el celular la hoja va primero
   inspectorPanel.classList.add("collapsed");
   togglePanelBtn.classList.remove("on");
 }
-
+/* ======================= barra y teclado propios ======================= */
+$("#m-select").onclick = () => setModo("select");
+$("#m-multi").onclick = () => setModo(modo === "multi" ? "select" : "multi");
+$("#m-connect").onclick = () => setModo("connect");
+$("#b-mason").onclick = mostrarMason;
+$("#b-clear").onclick = () => {
+  if (!S.nodos.length || confirm("¿Vaciar el diagrama?")) {
+    S.nodos = []; S.ramas = []; S.sel = []; S.selR = []; commit(); render();
+  }
+};
+document.querySelectorAll(".ptool").forEach(b =>
+  b.onclick = () => setPendiente(pendiente === b.dataset.add ? null : b.dataset.add));
+/* Los atajos de una letra de esta herramienta (los comunes están en comun/teclado.js) */
+function teclaPropia(k) {
+  if (k === "n") setPendiente("nodo");
+  else if (k === "v") setModo("select");
+  else if (k === "x") setModo("multi");
+  else if (k === "c") setModo("connect");
+  else if (k === "a") mostrarMason();
+  else return false;
+  return true;
+}
+function alEscape() {
+  setPendiente(null); S.sel = []; S.selR = [];
+  render();
+}
 /* ======================= ejemplos ======================= */
 $("#ejemplos").onchange = e => { if (e.target.value) { cargarEjemplo(e.target.value); e.target.value = ""; } };
 function cargarEjemplo(cual) {
@@ -1849,12 +2249,62 @@ function cargarEjemplo(cual) {
   }
   commit(); fit();
 }
+/* ======================= autoguardado =======================
+   Lo que se va haciendo queda guardado en este navegador (localStorage), una copia por
+   herramienta: al volver a abrirla se recupera tal como quedó. Se guarda un rato después de
+   cada cambio y siempre al salir de la página. Es una red de seguridad, no reemplaza a
+   "Guardar": no viaja a otra compu ni a otro navegador. */
+const CLAVE_AUTO = "uni-tools-autoguardado-" + HERRAMIENTA.clave;
+let autoActivo = false, autoOk = true, autoTimer = 0;
+function guardarAhora() {
+  if (!autoActivo) return;
+  clearTimeout(autoTimer);
+  try { localStorage.setItem(CLAVE_AUTO, JSON.stringify({ guardado: Date.now(), doc: docDatos() })); autoOk = true; }
+  catch (e) { autoOk = false; }                    // modo privado, cuota llena, etc.
+}
+function autoguardar() {
+  if (!autoActivo) return;
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(guardarAhora, 400);
+}
+function recuperarAutoguardado() {
+  try {
+    const g = JSON.parse(localStorage.getItem(CLAVE_AUTO) || "null");
+    if (!g || !esObj(g.doc) || !Array.isArray(g.doc[HERRAMIENTA.nodos])) return false;
+    cargarDoc(g.doc);                                // pasa por la misma validación que un archivo
+    return true;
+  } catch (e) { return false; }
+}
+window.addEventListener("pagehide", guardarAhora);
+document.addEventListener("visibilitychange", () => { if (document.hidden) guardarAhora(); });
+// Si el navegador no deja guardar y hay algo dibujado, avisa antes de cerrar o recargar
+window.addEventListener("beforeunload", ev => {
+  guardarAhora();
+  if (!autoOk && S[HERRAMIENTA.nodos].length) { ev.preventDefault(); ev.returnValue = ""; }
+});
 
+/* ======================= volver al inicio ======================= */
+function irAlInicio() {
+  guardarAhora();
+  const msg = autoOk
+    ? `¿Volver al inicio?\n\nTu diagrama queda guardado en este navegador: cuando vuelvas a abrir ${HERRAMIENTA.nombre} lo vas a encontrar como lo dejaste.`
+    : "¿Volver al inicio?\n\nEste navegador no deja guardar automáticamente: si no descargaste el diagrama con «Guardar», se va a perder.";
+  if (!S[HERRAMIENTA.nodos].length || confirm(msg)) location.href = "index.html";
+}
+document.getElementById("b-inicio").addEventListener("click", ev => { ev.preventDefault(); irAlInicio(); });
+
+/* ======================= arranque =======================
+   Lo último de cada herramienta: recupera lo autoguardado o, si no hay, carga su ejemplo. */
+function arrancar(cargarEjemploInicial) {
+  if (recuperarAutoguardado()) { fit(); setTimeout(() => toast("Se recuperó tu último diagrama"), 60); }
+  else cargarEjemploInicial();
+  lastSnap = snapshot(); undoStack = []; redoStack = [];
+  autoActivo = true;
+  window.addEventListener("resize", render);
+}
 /* ======================= arranque ======================= */
 setModo("select");
-cargarEjemplo("dos");
-lastSnap = snapshot();
-window.addEventListener("resize", render);
+arrancar(() => cargarEjemplo("dos"));
 </script>
 </body>
 </html>

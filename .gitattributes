@@ -1,0 +1,5 @@
+# Las tres herramientas de la raíz las arma src/construir.js: que GitHub las
+# muestre plegadas, como archivos generados, y no invite a editarlas a mano.
+diagrama-bloque.html linguist-generated=true
+simulador-logico.html linguist-generated=true
+diagrama-señales.html linguist-generated=true

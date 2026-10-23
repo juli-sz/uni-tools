@@ -1,0 +1,134 @@
+/* ======================= estilos comunes =======================
+   La carcasa de las tres herramientas: barra de arriba, hoja, paleta flotante, panel,
+   barra de estado, avisos y ventanas. Lo que cambia de una a otra (anchos, colores
+   del dibujo) va en el estilos.css de cada una, que viene después y manda. */
+:root{
+  --ink:#12181f;
+  --ink-2:#3d4b5a;
+  --line:#d7dee6;
+  --line-2:#eef2f6;
+  --paper:#ffffff;
+  --shell:#f2f5f8;
+  --accent:#0d5bd6;
+  --accent-soft:#e3edff;
+  --warn:#c2410c;
+  --ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+  --draw:Arial,Helvetica,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--ui);color:var(--ink);background:var(--shell);
+  display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+/* ---------- barra de arriba ---------- */
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;
+  background:var(--paper);border-bottom:1px solid var(--line);z-index:5}
+.brand{display:flex;align-items:baseline;gap:8px;margin-right:4px}
+a.btn{text-decoration:none;color:inherit;font-size:12px;line-height:normal}
+#b-inicio{flex:none}
+.brand b{font-size:14px;letter-spacing:-.01em}
+.brand span{font-family:var(--mono);font-size:10px;color:#8a97a5;letter-spacing:.08em;text-transform:uppercase}
+.group{display:flex;align-items:center;gap:4px;padding-right:12px;border-right:1px solid var(--line-2)}
+.group:last-child{border-right:0}
+/* los grupos se pliegan con un clic en su nombre */
+.glab{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;text-transform:uppercase;
+  margin-right:2px;cursor:pointer;user-select:none;transition:color .15s}
+.glab:hover{color:var(--ink)}
+.glab::after{content:" \25BC";font-size:8px;opacity:.6;display:inline-block;
+  transition:transform .2s;margin-left:4px}
+.group.collapsed .glab::after{transform:rotate(-90deg)}
+.group.collapsed > *:not(.glab){display:none !important}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 9px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;line-height:1;white-space:nowrap;
+  transition:background .12s,border-color .12s}
+.btn:hover{background:var(--line-2)}
+.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.on svg{stroke:#fff}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--line-2)}
+.btn svg{width:14px;height:14px;stroke:var(--ink-2);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.chip{font-family:var(--mono);font-size:11px;color:var(--ink-2);padding:0 6px}
+.marca-navbar{height:26px;width:auto;display:block;flex:none}
+/* editor que aparece sobre la hoja al hacer doble clic */
+.editor-hoja{position:absolute;z-index:8;transform:translate(-50%,-50%);
+  border:1.5px solid var(--accent);border-radius:6px;padding:5px 7px;
+  font-family:var(--draw);font-size:13px;text-align:center;background:var(--paper);
+  box-shadow:0 8px 24px rgba(18,24,31,.2);outline:none}
+/* En pantallas angostas el panel flota sobre la hoja en vez de comerle el ancho */
+@media (max-width:720px){
+  main{position:relative}
+  #inspector{position:absolute;top:0;right:0;bottom:0;z-index:6;width:min(300px,86vw);
+    box-shadow:-8px 0 24px rgba(18,24,31,.14)}
+}
+/* ---------- estructura ---------- */
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;background:var(--paper);overflow:hidden}
+svg#canvas{width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+svg#canvas.panning{cursor:grabbing}
+/* paleta flotante para insertar */
+#palette{position:absolute;top:12px;left:12px;background:var(--paper);border:1px solid var(--line);
+  border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:4px;
+  box-shadow:0 6px 24px rgba(18,24,31,.08)}
+#palette .ptitle{font-family:var(--mono);font-size:9px;color:#93a0ae;letter-spacing:.1em;padding:2px 4px 4px}
+.ptool{display:flex;align-items:center;border:1px solid transparent;background:transparent;
+  border-radius:7px;cursor:pointer;text-align:left}
+.ptool:hover{background:var(--line-2)}
+.ptool.on{background:var(--accent-soft);border-color:#b9d2ff}
+.ptool span{font-size:12px}
+.ptool kbd{margin-left:auto;font-family:var(--mono);font-size:10px;color:#93a0ae}
+/* panel derecho */
+#inspector{flex:none;background:var(--paper);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+  transition:width .2s ease,min-width .2s ease,border-color .2s ease}
+#inspector.collapsed{width:0;min-width:0;border-left-color:transparent}
+.sec{padding:12px 14px;border-bottom:1px solid var(--line-2)}
+.sec h3{margin:0 0 10px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:#93a0ae;font-weight:600}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.row:last-child{margin-bottom:0}
+.row label{font-size:11.5px;color:var(--ink-2);flex:none}
+.row .fill{flex:1;min-width:0}
+input[type=text],input[type=number],select{width:100%;border:1px solid var(--line);border-radius:6px;
+  padding:5px 7px;background:var(--paper)}
+.hint{font-size:11px;color:#8a97a5;line-height:1.5}
+.empty{padding:26px 16px;text-align:center;color:#93a0ae;font-size:12px;line-height:1.6}
+.iconbar{display:flex;flex-wrap:wrap;gap:4px}
+kbd{font-family:var(--mono);background:var(--line-2);border:1px solid var(--line);
+  border-bottom-width:2px;border-radius:4px;padding:1px 4px;font-size:10px}
+/* ---------- barra de estado y avisos ---------- */
+#status{display:flex;align-items:center;gap:16px;padding:5px 14px;background:var(--paper);
+  border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:#8a97a5}
+#status .k{color:var(--ink-2)}
+#toast{position:absolute;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;font-size:12px;padding:8px 10px 8px 14px;border-radius:8px;
+  display:flex;align-items:center;gap:8px;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* la cruz: sólo se puede apretar mientras el aviso está a la vista */
+#toast .x{flex:none;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;
+  color:rgba(255,255,255,.75);font:inherit;line-height:1;cursor:pointer;pointer-events:none}
+#toast .x::before{content:"✕";font-size:11px}
+#toast.show .x{pointer-events:auto}
+#toast .x:hover{background:rgba(255,255,255,.16);color:#fff}
+/* ---------- ventanas ---------- */
+.overlay{position:fixed;inset:0;background:rgba(18,24,31,.45);display:none;align-items:center;
+  justify-content:center;z-index:40;padding:20px}
+.overlay.show{display:flex}
+.modal{background:var(--paper);border-radius:12px;width:100%;
+  overflow:auto;padding:22px 24px;box-shadow:0 20px 60px rgba(18,24,31,.3)}
+.modal h2{margin:0 0 4px;font-size:16px}
+.modal p.sub{margin:0 0 16px;color:#8a97a5;font-size:12px}
+textarea{width:100%;height:190px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);
+  border-radius:8px;padding:8px;resize:vertical}
+/* elegir archivo para abrir */
+.filebox{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:10px;padding:16px}
+.filebox .nom{font-family:var(--mono);font-size:11.5px;color:#8a97a5;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal details{margin-top:16px}
+.modal summary{cursor:pointer;font-size:12px;color:var(--ink-2);user-select:none;padding:4px 0}
+.modal details textarea{margin-top:8px}
+/* ---------- dibujo: lo de la selección ---------- */
+.sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.band{fill:rgba(13,91,214,.08);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+.ghostline{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}

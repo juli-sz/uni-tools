@@ -1,0 +1,6 @@
+/* área de impresión: lo de afuera se sombrea porque no entra en la exportación */
+.hoja-fuera{fill:rgba(18,24,31,.06);pointer-events:none}
+.hoja-borde{fill:none;stroke:var(--accent);stroke-width:1.4;stroke-dasharray:8 5;
+  opacity:.8;pointer-events:none}
+.hoja-nombre{font-family:var(--mono);fill:var(--accent);opacity:.8;text-anchor:start;
+  pointer-events:none;user-select:none}

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<!-- Archivo armado por src/construir.js: no se edita a mano. Las fuentes están en src/senales/ y src/comun/. -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagramas de flujo de señales</title>
+<meta name="description" content="Nodos, transmitancias y la regla de Mason: trayectorias, lazos, cofactores y función de transferencia">
+<link rel="icon" type="image/png" href="uni-tools-marca.png">
+<style>
+/* @incluir comun/base.css */
+/* @incluir senales/estilos.css */
+</style>
+</head>
+<body>
+
+<header>
+<!-- @incluir comun/inicio.html -->
+  <div class="brand"><b>Flujo de señales</b><span>mason</span></div>
+
+  <div class="group collapsed">
+    <span class="glab">Modo</span>
+    <button class="btn on" id="m-select" title="Seleccionar y mover (V)">Selección</button>
+    <button class="btn" id="m-multi" title="Selección múltiple (X): cada clic suma o saca, sin tener que usar Shift">Selección múltiple</button>
+    <button class="btn" id="m-connect" title="Dibujar ramas (C)">Conectar</button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Edición</span>
+<!-- @incluir comun/deshacer.html -->
+    <button class="btn ghost" id="b-dup" title="Duplicar (Ctrl+D)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg><span>Duplicar</span> <kbd>Ctrl+D</kbd></button>
+<!-- @incluir comun/borrar.html -->
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Vista</span>
+<!-- @incluir comun/zoom.html -->
+    <button class="btn ghost" id="b-gridshow" title="Ver grilla">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><path d="M4 12h16M12 4v16"/></svg></button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Análisis</span>
+    <button class="btn" id="b-mason" title="Análisis completo (A)">
+      <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M6 15l4-6 4 4 4-8"/></svg>Mason</button>
+    <select id="ejemplos" style="width:150px" title="Cargar un diagrama de ejemplo">
+      <option value="">Ejemplos…</option>
+      <option value="simple">Lazo simple</option>
+      <option value="dos">Dos lazos que se tocan</option>
+      <option value="disjuntos">Lazos disjuntos</option>
+      <option value="dostray">Dos trayectorias directas</option>
+    </select>
+    <button class="btn ghost" id="b-clear">Vaciar</button>
+  </div>
+
+  <div class="group collapsed">
+    <span class="glab">Archivo</span>
+<!-- @incluir comun/archivo.html -->
+    <button class="btn ghost" id="b-svg">SVG</button>
+    <button class="btn ghost" id="b-png">PNG</button>
+    <button class="btn ghost" id="b-save">Guardar</button>
+    <button class="btn ghost" id="b-open">Abrir</button>
+    <button class="btn ghost" id="b-help">?</button>
+  </div>
+
+<!-- @incluir comun/marca-y-panel.html -->
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="canvas">
+      <defs>
+<!-- @incluir comun/grilla.html -->
+      </defs>
+      <g id="viewport">
+        <rect id="gridbg" x="-6000" y="-6000" width="14000" height="14000" fill="url(#gridPat10)"/>
+        <g id="gRamas"></g>
+        <g id="gNodos"></g>
+        <g id="gOverlay"></g>
+      </g>
+    </svg>
+    <div id="palette">
+      <div class="ptitle">INSERTAR</div>
+      <button class="ptool" data-add="nodo">
+        <svg viewBox="0 0 34 22"><circle cx="17" cy="11" r="4" fill="currentColor" stroke="none"/><path d="M2 11h11M21 11h11"/></svg>
+        <span>Nodo</span><kbd>N</kbd></button>
+      <div class="ptitle" style="padding-top:8px">RAMAS</div>
+      <div class="hint" style="padding:0 8px 6px;width:172px">Pasá a <b>Conectar</b> (<kbd>C</kbd>) y
+        arrastrá de un nodo a otro. La transmitancia se escribe en el panel.</div>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <aside id="inspector"><div id="insp"></div></aside>
+</main>
+
+<div id="status">
+  <span><span class="k">Nodos</span> <span id="st-n">0</span></span>
+  <span><span class="k">Ramas</span> <span id="st-r">0</span></span>
+  <span><span class="k">Selección</span> <span id="st-s">—</span></span>
+  <span id="st-warn"></span>
+  <span style="display:flex; gap:8px; align-items:center; margin-left:8px; color:var(--ink-2);">
+    <span class="k">Atajos:</span>
+    <span><kbd>N</kbd> Nodo</span>
+    <span><kbd>C</kbd> Conectar</span>
+    <span><kbd>V</kbd> Selección</span>
+    <span><kbd>X</kbd> Múltiple</span>
+    <span><kbd>Ctrl+D</kbd> Duplicar</span>
+    <span><kbd>A</kbd> Análisis</span>
+    <span><kbd>Supr</kbd> Borrar</span>
+    <span><kbd>?</kbd> Ayuda</span>
+  </span>
+  <span id="st-hint" style="margin-left:auto"></span>
+</div>
+
+<div class="overlay" id="ov-mason"><div class="modal">
+  <h2>Análisis por la regla de Mason</h2>
+  <p class="sub" id="mason-sub"></p>
+  <div id="mason-body"></div>
+  <div style="margin-top:18px;text-align:right">
+    <button class="btn" onclick="document.getElementById('ov-mason').classList.remove('show')">Cerrar</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="ov-help"><div class="modal" style="max-width:620px">
+  <h2>Cómo se usa</h2>
+  <p class="sub">Un diagrama de flujo de señales es un grafo: los nodos son las variables y cada rama
+    lleva la transmitancia que multiplica a la variable de la que sale.</p>
+  <table>
+    <tr><td><kbd>N</kbd></td><td>Insertar un nodo. Después hacé clic en la hoja</td></tr>
+    <tr><td><kbd>C</kbd> / <kbd>V</kbd></td><td>Modo conectar / modo selección</td></tr>
+    <tr><td>Arrastrar de nodo a nodo</td><td>En modo conectar, dibuja una rama. Si soltás sobre el mismo nodo queda un autolazo</td></tr>
+    <tr><td>Entrada y salida</td><td>Seleccioná un nodo y marcalo en el panel. Mason necesita una de cada una</td></tr>
+    <tr><td><kbd>A</kbd></td><td>Análisis: ecuaciones, trayectorias, lazos, cofactores y función de transferencia</td></tr>
+    <tr><td><kbd>Supr</kbd></td><td>Borrar lo seleccionado</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Deshacer / rehacer</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Cortar (Ctrl+X) también vale: el primer pegado vuelve al mismo lugar. Copiar y pegar los nodos seleccionados (con las ramas que los unen); cada pegado sale un poco más corrido</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicar los nodos seleccionados (con las ramas que los unen)</td></tr>
+    <tr><td>Flechas</td><td>Mover un paso de grilla (<kbd>Shift</kbd> = 1 px)</td></tr>
+    <tr><td>Rueda / Espacio / <kbd>Ctrl</kbd>+clic</td><td>Mueve la hoja (con el botón del medio, la barra espaciadora o <kbd>Ctrl</kbd> + clic izquierdo arrastrando) · <kbd>Ctrl</kbd>+rueda hace zoom · <kbd>Shift</kbd>+rueda a lo ancho</td></tr>
+    <tr><td>Pantalla táctil</td><td>Un dedo en el fondo mueve la hoja; un dedo sobre un nodo o una
+      rama lo selecciona y lo arrastra; dos dedos hacen zoom</td></tr>
+  </table>
+  <div style="margin-top:16px;text-align:right">
+    <button class="btn" onclick="document.getElementById('ov-help').classList.remove('show')">Cerrar</button>
+  </div>
+</div></div>
+
+<!-- @incluir comun/ventana-abrir.html titulo="Abrir diagrama" cosa="diagrama" nodos="nodos" conexiones="ramas" -->
+
+<script>
+// @incluir comun/lienzo.js
+// @incluir senales/herramienta.js
+// @incluir comun/ids.js
+// @incluir comun/documento.js
+// @incluir comun/historial.js
+// @incluir comun/portapapeles.js
+// @incluir comun/vista.js
+// @incluir comun/panel.js
+// @incluir senales/modelo.js
+// @incluir senales/texto.js
+// @incluir senales/geometria.js
+// @incluir senales/dibujo.js
+// @incluir senales/mason.js
+// @incluir senales/equivalente.js
+// @incluir senales/analisis.js
+// @incluir senales/panel.js
+// @incluir senales/exportar.js
+// @incluir comun/doble-clic.js
+// @incluir comun/tactil.js
+// @incluir senales/interaccion.js
+// @incluir comun/teclado.js
+// @incluir comun/barra.js
+// @incluir senales/barra.js
+// @incluir senales/ejemplos.js
+// @incluir comun/autoguardado.js
+// @incluir senales/arranque.js
+</script>
+</body>
+</html>

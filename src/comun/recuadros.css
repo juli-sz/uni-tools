@@ -1,0 +1,5 @@
+/* recuadros para encuadrar: el relleno "suave" es el propio color del trazo aguado */
+.m-shape{fill:none;stroke:var(--c-borde);stroke-linejoin:round}
+.m-shape.solido{fill:var(--c-relleno)}
+.m-shape.suave{fill:var(--c-borde);fill-opacity:.1}
+.sel .m-shape{stroke:var(--accent)}

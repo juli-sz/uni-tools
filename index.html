@@ -100,6 +100,7 @@ a.boton .flecha{
   font-size: 20px;
   color: var(--acento);
 }
+.guardado{display:block;margin-top:4px;font-size:12px;color:var(--acento)}
 </style>
 </head>
 
@@ -115,7 +116,7 @@ a.boton .flecha{
        BOTÓN 1 — Diagramas de bloques
        El href es el archivo al que va cuando hacés clic.
        ========================================================== -->
-  <a class="boton" href="diagrama-bloque.html">
+  <a class="boton" href="diagrama-bloque.html" data-auto="bloque">
     <svg class="icono" viewBox="0 0 48 48">
       <rect x="17" y="17" width="20" height="14"/>
       <path d="M2 24h15M37 24h9"/>
@@ -131,7 +132,7 @@ a.boton .flecha{
   <!-- ==========================================================
        BOTÓN 2 — Diagramas de señales de flujo
        ========================================================== -->
-  <a class="boton" href="diagrama-señales.html">
+  <a class="boton" href="diagrama-señales.html" data-auto="senales">
     <svg class="icono" viewBox="0 0 48 48">
       <path d="M4 30h6M38 30h6"/>
       <path d="M10 30q9 -16 18 0" fill="none"/>
@@ -150,7 +151,7 @@ a.boton .flecha{
   <!-- ==========================================================
        BOTÓN 3 — Circuitos lógicos
        ========================================================== -->
-  <a class="boton" href="simulador-logico.html">
+  <a class="boton" href="simulador-logico.html" data-auto="simulador">
     <svg class="icono" viewBox="0 0 48 48">
       <path d="M16 14h12a10 10 0 010 20H16z"/>
       <path d="M2 20h14M2 28h14M38 24h8"/>
@@ -162,7 +163,22 @@ a.boton .flecha{
     <span class="flecha">&rarr;</span>
   </a>
 
-  
+  <script>
+  /* Si una herramienta tiene un diagrama autoguardado en este navegador, se avisa en su botón.
+     La clave es la misma que arma src/comun/autoguardado.js ("uni-tools-autoguardado-" + la clave
+     de la herramienta): los data-auto de los botones de arriba tienen que coincidir. */
+  document.querySelectorAll("[data-auto]").forEach(b => {
+    try {
+      const g = JSON.parse(localStorage.getItem("uni-tools-autoguardado-" + b.dataset.auto) || "null");
+      const lista = g && g.doc && (g.doc.nodes || g.doc.nodos);
+      if (!lista || !lista.length) return;
+      const d = b.querySelector(".desc"), aviso = document.createElement("span");
+      aviso.className = "guardado";
+      aviso.textContent = "Tenés un diagrama guardado: seguís donde lo dejaste";
+      d.after(aviso);
+    } catch (e) {}
+  });
+  </script>
 
 </body>
 </html>
