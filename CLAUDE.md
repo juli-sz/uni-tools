@@ -4,14 +4,15 @@ Herramientas de escritorio-en-el-navegador para la cursada: se dibujan diagramas
 circuitos lógicos, se simulan y se exportan. Publicado con GitHub Pages desde `main`
 (https://juli-sz.github.io/uni-tools/).
 
-## Las cuatro páginas
+## Las cinco páginas
 
 | archivo | qué es |
 |---|---|
-| `index.html` | portada con el logo y los tres accesos |
+| `index.html` | portada con el logo y los cuatro accesos |
 | `diagrama-bloque.html` | diagramas de bloques: bloques con ecuaciones, sumadores, flechas ruteadas solas |
 | `simulador-logico.html` | circuitos lógicos: compuertas, biestables, sumadores, simulación en vivo y tabla de verdad |
 | `diagrama-señales.html` | flujo de señales: nodos, transmitancias y análisis por la regla de Mason |
+| `simulador-lgr.html` | lugar geométrico de las raíces: desde la ecuación o desde ceros y polos, gráfico y cálculos paso a paso |
 
 ## La regla que manda sobre todo lo demás
 
